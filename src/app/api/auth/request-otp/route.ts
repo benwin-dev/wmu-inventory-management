@@ -33,6 +33,16 @@ async function sendOtpEmail(email: string, otp: string) {
   const demoRecipient = process.env.RESEND_DEMO_RECIPIENT?.trim();
   const to = process.env.NODE_ENV === "production" || !demoRecipient ? email : demoRecipient;
 
+  console.log("apiKey", apiKey, "from", from, "demoRecipient", demoRecipient, "to", to);
+  console.log("NODE_ENV", process.env.NODE_ENV);
+  console.log("RESEND_DEMO_RECIPIENT", process.env.RESEND_DEMO_RECIPIENT);
+  console.log("RESEND_FROM_EMAIL", process.env.RESEND_FROM_EMAIL);
+  console.log("RESEND_API_KEY", process.env.RESEND_API_KEY);
+  console.log("Resend_API_KEY", process.env.Resend_API_KEY);
+  console.log("RESEND_DEMO_RECIPIENT", process.env.RESEND_DEMO_RECIPIENT);
+  console.log("RESEND_FROM_EMAIL", process.env.RESEND_FROM_EMAIL);
+  console.log("RESEND_API_KEY", process.env.RESEND_API_KEY);
+
   if (!apiKey || !from) {
     throw new Error("Resend settings are not configured.");
   }
