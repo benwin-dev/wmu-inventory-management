@@ -7,6 +7,13 @@ const WMU_DOMAIN = "wmich.edu";
 const OTP_LENGTH = 6;
 
 type AuthStep = "request" | "verify" | "app";
+type MasterInventoryItem = {
+  sku: string;
+  item_name: string;
+  unit_type: string;
+  on_hand_qty: string;
+  unit_price: string | null;
+};
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
@@ -32,10 +39,15 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [signedInEmail, setSignedInEmail] = useState("");
+  const [inventoryItems, setInventoryItems] = useState<MasterInventoryItem[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventoryError, setInventoryError] = useState("");
 
   const normalizedEmail = useMemo(() => normalizeEmail(email), [email]);
   const emailLooksValid = isWmuEmail(normalizedEmail);
   const appEmail = signedInEmail || normalizedEmail;
+  const totalItems = inventoryItems.length;
+  const lowStockItems = inventoryItems.filter((item) => Number(item.on_hand_qty) <= 24).length;
 
   useEffect(() => {
     let isMounted = true;
@@ -166,6 +178,52 @@ export default function Home() {
     resetRequestState();
   };
 
+  useEffect(() => {
+    if (authStep !== "app") {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadMasterInventory() {
+      setInventoryLoading(true);
+      setInventoryError("");
+
+      try {
+        const response = await fetch("/api/inventory/master", { cache: "no-store" });
+        const data = (await response.json()) as {
+          error?: string;
+          items?: MasterInventoryItem[];
+        };
+
+        if (!response.ok) {
+          if (isMounted) {
+            setInventoryError(data.error || "Unable to load inventory right now.");
+          }
+          return;
+        }
+
+        if (isMounted) {
+          setInventoryItems(data.items || []);
+        }
+      } catch {
+        if (isMounted) {
+          setInventoryError("Unable to load inventory right now.");
+        }
+      } finally {
+        if (isMounted) {
+          setInventoryLoading(false);
+        }
+      }
+    }
+
+    loadMasterInventory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authStep]);
+
   if (authStep === "app") {
     return (
       <main className="min-h-screen bg-[#f6f1e8] text-stone-900">
@@ -203,10 +261,10 @@ export default function Home() {
 
           <div className="grid gap-4 md:grid-cols-4">
             {[
-              ["Total Items", "2,184"],
-              ["Low Stock", "26"],
-              ["Pending Requests", "14"],
-              ["Checked Out", "372"],
+              ["Total Items", String(totalItems)],
+              ["Low Stock (<=24)", String(lowStockItems)],
+              ["Location", "Commissary"],
+              ["Signed In", "Active"],
             ].map(([label, value]) => (
               <article key={label} className="rounded-lg border border-stone-200 bg-white p-4">
                 <p className="text-sm text-stone-500">{label}</p>
@@ -217,20 +275,38 @@ export default function Home() {
 
           <div className="mt-6 overflow-hidden rounded-lg border border-stone-200 bg-white">
             <div className="border-b border-stone-200 px-4 py-3">
-              <h3 className="font-semibold text-stone-950">Recent Inventory Activity</h3>
+              <h3 className="font-semibold text-stone-950">Master Inventory (Commissary)</h3>
             </div>
-            <div className="divide-y divide-stone-100">
-              {[
-                ["Dell Latitude 5430", "Checked Out", "Engineering Lab"],
-                ["Epson PowerLite 2250U", "Maintenance", "AV Services"],
-                ["Logitech Rally Cam", "Available", "Main Campus"],
-              ].map(([item, status, owner]) => (
-                <div key={item} className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-3">
-                  <span className="font-medium text-stone-950">{item}</span>
-                  <span className="text-stone-600">{status}</span>
-                  <span className="text-stone-500">{owner}</span>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              {inventoryLoading && <p className="px-4 py-3 text-sm text-stone-600">Loading inventory...</p>}
+              {!!inventoryError && <p className="px-4 py-3 text-sm font-medium text-red-700">{inventoryError}</p>}
+
+              {!inventoryLoading && !inventoryError && (
+                <table className="min-w-full text-left text-sm">
+                  <thead className="border-b border-stone-200 bg-stone-50 text-stone-700">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Item</th>
+                      <th className="px-4 py-3 font-semibold">SKU</th>
+                      <th className="px-4 py-3 font-semibold">On Hand</th>
+                      <th className="px-4 py-3 font-semibold">Unit Price</th>
+                      <th className="px-4 py-3 font-semibold">Unit Type</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {inventoryItems.map((item) => (
+                      <tr key={item.sku}>
+                        <td className="px-4 py-3 font-medium text-stone-950">{item.item_name}</td>
+                        <td className="px-4 py-3 text-stone-600">{item.sku}</td>
+                        <td className="px-4 py-3 text-stone-800">{item.on_hand_qty}</td>
+                        <td className="px-4 py-3 text-stone-800">
+                          {item.unit_price ? `$${Number(item.unit_price).toFixed(2)}` : "N/A"}
+                        </td>
+                        <td className="px-4 py-3 text-stone-600">{item.unit_type}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </section>

@@ -1,6 +1,6 @@
 BEGIN;
 
-CREATE OR REPLACE VIEW v_valley2_on_hand AS
+CREATE OR REPLACE VIEW v_commissary_on_hand AS
 SELECT
   l.code AS location_code,
   l.name AS location_name,
@@ -12,8 +12,12 @@ SELECT
 FROM inventory_balances b
 JOIN inventory_locations l ON l.id = b.location_id
 JOIN items i ON i.id = b.item_id
-WHERE l.code = 'VALLEY2'
+WHERE l.code = 'COMMISSARY'
 ORDER BY i.name;
+
+-- Backward compatible alias for older queries.
+CREATE OR REPLACE VIEW v_valley2_on_hand AS
+SELECT * FROM v_commissary_on_hand;
 
 CREATE OR REPLACE VIEW v_daily_cafe_charges AS
 SELECT
