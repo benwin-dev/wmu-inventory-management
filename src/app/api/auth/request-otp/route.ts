@@ -5,6 +5,19 @@ export const runtime = "nodejs";
 
 const WMU_DOMAIN = "wmich.edu";
 
+class OtpEmailSendError extends Error {
+  status: number;
+
+  providerDetails: string;
+
+  constructor(status: number, providerDetails: string) {
+    super(`Failed to send OTP email (${status})`);
+    this.name = "OtpEmailSendError";
+    this.status = status;
+    this.providerDetails = providerDetails;
+  }
+}
+
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
@@ -73,19 +86,40 @@ async function sendOtpEmail(email: string, otp: string) {
 
   if (!response.ok) {
     const providerError = await response.text();
-    throw new Error(`Failed to send OTP email (${response.status}): ${providerError}`);
+    throw new OtpEmailSendError(response.status, providerError);
   }
 }
 
+function getProviderStatusHint(status: number) {
+  if (status === 401) {
+    return "Invalid or missing RESEND_API_KEY.";
+  }
+
+  if (status === 403) {
+    return "Sender/domain is not verified in Resend for this environment.";
+  }
+
+  if (status === 422) {
+    return "Invalid email payload (usually FROM or TO address).";
+  }
+
+  if (status >= 500) {
+    return "Email provider temporary outage.";
+  }
+
+  return "Email provider rejected the request.";
+}
+
 function getPublicErrorMessage(error: unknown) {
+  if (error instanceof OtpEmailSendError) {
+    const hint = getProviderStatusHint(error.status);
+    return `Email provider rejected the OTP send request (${error.status}). ${hint}`;
+  }
+
   const details = error instanceof Error ? error.message : String(error);
 
   if (details.includes("Resend settings are not configured")) {
     return "Email delivery is not configured on the server.";
-  }
-
-  if (details.includes("Failed to send OTP email")) {
-    return "Email provider rejected the OTP send request.";
   }
 
   return "Unable to send code right now.";
@@ -123,7 +157,15 @@ export async function POST(request: NextRequest) {
       { status: 200 },
     );
   } catch (error) {
-    console.error("OTP request failed", error);
+    if (error instanceof OtpEmailSendError) {
+      console.error("OTP request failed", {
+        status: error.status,
+        providerDetails: error.providerDetails,
+      });
+    } else {
+      console.error("OTP request failed", error);
+    }
+
     return NextResponse.json({ error: getPublicErrorMessage(error) }, { status: 500 });
   }
 }
