@@ -46,11 +46,20 @@ function shouldUseDemoRecipient() {
   return process.env.RESEND_FORCE_DEMO_RECIPIENT?.toLowerCase() === "true";
 }
 
+function allowProdRealEmail() {
+  return process.env.ALLOW_PROD_REAL_EMAIL?.toLowerCase() === "true";
+}
+
 function getOtpRecipient(email: string) {
   const demoRecipient = process.env.RESEND_DEMO_RECIPIENT?.trim();
 
   if (!demoRecipient) {
     return email;
+  }
+
+  // Safe default: in production, route to demo recipient unless explicitly allowed.
+  if (process.env.NODE_ENV === "production" && !allowProdRealEmail()) {
+    return demoRecipient;
   }
 
   if (process.env.NODE_ENV !== "production" || shouldUseDemoRecipient()) {
