@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requestOtpCreation } from "@/lib/otp-store";
 
+export const runtime = "nodejs";
+
 const WMU_DOMAIN = "wmich.edu";
 
 function normalizeEmail(value: string) {
@@ -27,25 +29,33 @@ function getClientIp(request: NextRequest) {
   return request.headers.get("x-real-ip") || "unknown";
 }
 
+function shouldUseDemoRecipient() {
+  return process.env.RESEND_FORCE_DEMO_RECIPIENT?.toLowerCase() === "true";
+}
+
+function getOtpRecipient(email: string) {
+  const demoRecipient = process.env.RESEND_DEMO_RECIPIENT?.trim();
+
+  if (!demoRecipient) {
+    return email;
+  }
+
+  if (process.env.NODE_ENV !== "production" || shouldUseDemoRecipient()) {
+    return demoRecipient;
+  }
+
+  return email;
+}
+
 async function sendOtpEmail(email: string, otp: string) {
   const apiKey = process.env.RESEND_API_KEY || process.env.Resend_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
-  const demoRecipient = process.env.RESEND_DEMO_RECIPIENT?.trim();
-  const to = process.env.NODE_ENV === "production" || !demoRecipient ? email : demoRecipient;
-
-  console.log("apiKey", apiKey, "from", from, "demoRecipient", demoRecipient, "to", to);
-  console.log("NODE_ENV", process.env.NODE_ENV);
-  console.log("RESEND_DEMO_RECIPIENT", process.env.RESEND_DEMO_RECIPIENT);
-  console.log("RESEND_FROM_EMAIL", process.env.RESEND_FROM_EMAIL);
-  console.log("RESEND_API_KEY", process.env.RESEND_API_KEY);
-  console.log("Resend_API_KEY", process.env.Resend_API_KEY);
-  console.log("RESEND_DEMO_RECIPIENT", process.env.RESEND_DEMO_RECIPIENT);
-  console.log("RESEND_FROM_EMAIL", process.env.RESEND_FROM_EMAIL);
-  console.log("RESEND_API_KEY", process.env.RESEND_API_KEY);
 
   if (!apiKey || !from) {
     throw new Error("Resend settings are not configured.");
   }
+
+  const to = getOtpRecipient(email);
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -65,6 +75,20 @@ async function sendOtpEmail(email: string, otp: string) {
     const providerError = await response.text();
     throw new Error(`Failed to send OTP email (${response.status}): ${providerError}`);
   }
+}
+
+function getPublicErrorMessage(error: unknown) {
+  const details = error instanceof Error ? error.message : String(error);
+
+  if (details.includes("Resend settings are not configured")) {
+    return "Email delivery is not configured on the server.";
+  }
+
+  if (details.includes("Failed to send OTP email")) {
+    return "Email provider rejected the OTP send request.";
+  }
+
+  return "Unable to send code right now.";
 }
 
 export async function POST(request: NextRequest) {
@@ -100,6 +124,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error("OTP request failed", error);
-    return NextResponse.json({ error: "Unable to send code right now." }, { status: 500 });
+    return NextResponse.json({ error: getPublicErrorMessage(error) }, { status: 500 });
   }
 }
