@@ -11,7 +11,9 @@ type MasterInventoryItem = {
   sku: string;
   item_name: string;
   unit_type: string;
+  case_size: string | null;
   on_hand_qty: string;
+  case_price: string | null;
   unit_price: string | null;
 };
 
@@ -286,22 +288,26 @@ export default function Home() {
                   <thead className="border-b border-stone-200 bg-stone-50 text-stone-700">
                     <tr>
                       <th className="px-4 py-3 font-semibold">Item</th>
-                      <th className="px-4 py-3 font-semibold">SKU</th>
-                      <th className="px-4 py-3 font-semibold">On Hand</th>
+                      <th className="px-4 py-3 font-semibold">Case Price</th>
+                      <th className="px-4 py-3 font-semibold">Per Case</th>
                       <th className="px-4 py-3 font-semibold">Unit Price</th>
-                      <th className="px-4 py-3 font-semibold">Unit Type</th>
+                      <th className="px-4 py-3 font-semibold">Per Unit</th>
+                      <th className="px-4 py-3 font-semibold">On Hand</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100">
                     {inventoryItems.map((item) => (
                       <tr key={item.sku}>
                         <td className="px-4 py-3 font-medium text-stone-950">{item.item_name}</td>
-                        <td className="px-4 py-3 text-stone-600">{item.sku}</td>
-                        <td className="px-4 py-3 text-stone-800">{item.on_hand_qty}</td>
                         <td className="px-4 py-3 text-stone-800">
-                          {item.unit_price ? `$${Number(item.unit_price).toFixed(2)}` : "N/A"}
+                          {item.case_price ? `$${Number(item.case_price).toFixed(2)}` : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-stone-600">{item.case_size ?? "—"}</td>
+                        <td className="px-4 py-3 text-stone-800">
+                          {item.unit_price ? `$${Number(item.unit_price).toFixed(2)}` : "—"}
                         </td>
                         <td className="px-4 py-3 text-stone-600">{item.unit_type}</td>
+                        <td className="px-4 py-3 text-stone-800">{item.on_hand_qty}</td>
                       </tr>
                     ))}
                   </tbody>

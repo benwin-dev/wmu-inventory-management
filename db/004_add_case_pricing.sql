@@ -1,0 +1,9 @@
+BEGIN;
+
+ALTER TABLE items
+  ADD COLUMN IF NOT EXISTS case_size TEXT;
+
+ALTER TABLE item_prices
+  ADD COLUMN IF NOT EXISTS case_price NUMERIC(14,4);
+
+COMMIT;
