@@ -75,6 +75,13 @@ export default function Home() {
   const [confirmDeleteSku, setConfirmDeleteSku] = useState<string | null>(null);
   const [deletingSku, setDeletingSku] = useState<string | null>(null);
 
+  // Edit state
+  const [editingSku, setEditingSku] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<AddItemForm>(EMPTY_FORM);
+  const [editError, setEditError] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editUnitPriceManuallyEdited, setEditUnitPriceManuallyEdited] = useState(false);
+
   const normalizedEmail = useMemo(() => normalizeEmail(email), [email]);
   const emailLooksValid = isWmuEmail(normalizedEmail);
   const appEmail = signedInEmail || normalizedEmail;
@@ -99,6 +106,22 @@ export default function Home() {
       setAddForm((prev) => ({ ...prev, unit_price: autoUnitPrice }));
     }
   }, [autoUnitPrice, unitPriceManuallyEdited]);
+
+  // Auto-calculate unit price for edit form
+  const autoEditUnitPrice = useMemo(() => {
+    const cp = parseFloat(editForm.case_price);
+    const upc = parseFloat(editForm.units_per_case);
+    if (!isNaN(cp) && !isNaN(upc) && upc > 0) {
+      return (cp / upc).toString();
+    }
+    return "";
+  }, [editForm.case_price, editForm.units_per_case]);
+
+  useEffect(() => {
+    if (!editUnitPriceManuallyEdited && autoEditUnitPrice) {
+      setEditForm((prev) => ({ ...prev, unit_price: autoEditUnitPrice }));
+    }
+  }, [autoEditUnitPrice, editUnitPriceManuallyEdited]);
 
   useEffect(() => {
     let isMounted = true;
@@ -292,6 +315,66 @@ export default function Home() {
     }
   };
 
+  const openEditModal = (item: MasterInventoryItem) => {
+    setEditingSku(item.sku);
+    setEditForm({
+      name: item.item_name,
+      unit_type: item.unit_type,
+      units_per_case: item.units_per_case ? String(parseFloat(String(item.units_per_case))) : "",
+      case_price: item.case_price ? String(parseFloat(item.case_price)) : "",
+      unit_price: item.unit_price ? String(parseFloat(item.unit_price)) : "",
+      on_hand_qty: item.on_hand_qty,
+    });
+    setEditError("");
+    setEditUnitPriceManuallyEdited(true); // don't auto-override on open
+  };
+
+  const closeEditModal = () => {
+    setEditingSku(null);
+    setEditError("");
+  };
+
+  const handleEditItem = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingSku) return;
+    setIsEditing(true);
+    setEditError("");
+
+    try {
+      const response = await fetch(`/api/inventory/items/${encodeURIComponent(editingSku)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editForm.name.trim(),
+          unit_type: editForm.unit_type,
+          units_per_case: editForm.units_per_case ? parseFloat(editForm.units_per_case) : null,
+          case_price: editForm.case_price ? parseFloat(editForm.case_price) : null,
+          unit_price: editForm.unit_price ? parseFloat(editForm.unit_price) : null,
+          on_hand_qty: editForm.on_hand_qty ? parseFloat(editForm.on_hand_qty) : 0,
+        }),
+      });
+
+      const data = (await response.json()) as { error?: string; item?: MasterInventoryItem };
+
+      if (!response.ok) {
+        setEditError(data.error || "Unable to update item right now.");
+        return;
+      }
+
+      if (data.item) {
+        setInventoryItems((prev) =>
+          prev.map((item) => (item.sku === editingSku ? data.item! : item)),
+        );
+      }
+
+      closeEditModal();
+    } catch {
+      setEditError("Unable to update item right now.");
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
   const openAddModal = () => {
     setAddForm(EMPTY_FORM);
     setAddError("");
@@ -461,13 +544,22 @@ export default function Home() {
                               </button>
                             </span>
                           ) : (
-                            <button
-                              onClick={() => setConfirmDeleteSku(item.sku)}
-                              className={`transition-opacity text-stone-400 hover:text-red-600 ${hoveredSku === item.sku ? "opacity-100" : "opacity-0"}`}
-                              aria-label="Delete item"
-                            >
-                              🗑
-                            </button>
+                            <span className={`flex items-center justify-end gap-4 transition-opacity ${hoveredSku === item.sku ? "opacity-100" : "opacity-0"}`}>
+                              <button
+                                onClick={() => openEditModal(item)}
+                                className="cursor-pointer text-stone-400 hover:text-blue-600"
+                                aria-label="Edit item"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteSku(item.sku)}
+                                className="cursor-pointer text-stone-400 hover:text-red-600"
+                                aria-label="Delete item"
+                              >
+                                🗑
+                              </button>
+                            </span>
                           )}
                         </td>
                       </tr>
@@ -606,6 +698,132 @@ export default function Home() {
                     className="flex-1 rounded-lg bg-[#4a2f14] px-4 py-2 text-sm font-semibold text-[#f8e8c5] transition hover:bg-[#5c3a18] disabled:bg-[#8a6f4e]"
                   >
                     {isAdding ? "Saving..." : "Save Item"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Item Modal */}
+        {editingSku && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
+                <h2 className="text-lg font-semibold text-stone-950">Edit Item</h2>
+                <button type="button" onClick={closeEditModal} className="text-stone-400 transition hover:text-stone-700">✕</button>
+              </div>
+
+              <form onSubmit={handleEditItem} className="px-6 py-5 space-y-4">
+                {/* Name */}
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-stone-700">Item Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.name}
+                    onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+                    className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#8a6331] focus:ring-2 focus:ring-[#d9b98a66]"
+                  />
+                </div>
+
+                {/* Unit Type + Units Per Case */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-stone-700">Unit Type</label>
+                    <select
+                      value={editForm.unit_type}
+                      onChange={(e) => setEditForm((p) => ({ ...p, unit_type: e.target.value }))}
+                      className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#8a6331] focus:ring-2 focus:ring-[#d9b98a66]"
+                    >
+                      <option value="each">each</option>
+                      <option value="tub">tub</option>
+                      <option value="bag">bag</option>
+                      <option value="box">box</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-stone-700">Units Per Case</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={editForm.units_per_case}
+                      onChange={(e) => {
+                        setEditForm((p) => ({ ...p, units_per_case: e.target.value }));
+                        setEditUnitPriceManuallyEdited(false);
+                      }}
+                      className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#8a6331] focus:ring-2 focus:ring-[#d9b98a66]"
+                    />
+                  </div>
+                </div>
+
+                {/* Case Price + Unit Price */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-stone-700">Case Price ($)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={editForm.case_price}
+                      onChange={(e) => {
+                        setEditForm((p) => ({ ...p, case_price: e.target.value }));
+                        setEditUnitPriceManuallyEdited(false);
+                      }}
+                      className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#8a6331] focus:ring-2 focus:ring-[#d9b98a66]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-stone-700">
+                      Unit Price ($)
+                      {!editUnitPriceManuallyEdited && autoEditUnitPrice && (
+                        <span className="ml-1 text-xs text-stone-400">(auto-calculated)</span>
+                      )}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={editForm.unit_price}
+                      onChange={(e) => {
+                        setEditForm((p) => ({ ...p, unit_price: e.target.value }));
+                        setEditUnitPriceManuallyEdited(true);
+                      }}
+                      className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#8a6331] focus:ring-2 focus:ring-[#d9b98a66]"
+                    />
+                  </div>
+                </div>
+
+                {/* On Hand Qty */}
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-stone-700">On Hand Qty</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={editForm.on_hand_qty}
+                    onChange={(e) => setEditForm((p) => ({ ...p, on_hand_qty: e.target.value }))}
+                    className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#8a6331] focus:ring-2 focus:ring-[#d9b98a66]"
+                  />
+                </div>
+
+                {!!editError && <p className="text-sm font-medium text-red-700">{editError}</p>}
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeEditModal}
+                    className="flex-1 rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isEditing}
+                    className="flex-1 rounded-lg bg-[#4a2f14] px-4 py-2 text-sm font-semibold text-[#f8e8c5] transition hover:bg-[#5c3a18] disabled:bg-[#8a6f4e]"
+                  >
+                    {isEditing ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
               </form>
