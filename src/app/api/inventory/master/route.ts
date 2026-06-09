@@ -7,6 +7,7 @@ type InventoryRow = {
   item_name: string;
   unit_type: string;
   case_size: string | null;
+  units_per_case: string | null;
   on_hand_qty: string;
   case_price: string | null;
   unit_price: string | null;
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
         i.name AS item_name,
         i.unit_type,
         i.case_size,
+        i.units_per_case::text,
         COALESCE(b.on_hand_qty, 0)::text AS on_hand_qty,
         (
           SELECT ip.case_price::text
@@ -53,7 +55,7 @@ export async function GET(request: NextRequest) {
         ON b.item_id = i.id
        AND b.location_id = l.id
       WHERE i.active = TRUE
-      ORDER BY i.name ASC
+      ORDER BY i.created_at ASC
       `,
     );
 
