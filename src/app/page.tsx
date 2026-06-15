@@ -444,13 +444,21 @@ export default function Home() {
                 <h1 className="text-lg font-semibold text-[#2f200f]">Dashboard</h1>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-950"
-            >
-              Sign Out
-            </button>
+            <div className="flex items-center gap-3">
+              <a
+                href="/request"
+                className="rounded-lg bg-[#4a2f14] px-3 py-2 text-sm font-semibold text-[#f8e8c5] transition hover:bg-[#5c3a18]"
+              >
+                Request Items
+              </a>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-950"
+              >
+                Sign Out
+              </button>
+            </div>
           </div>
         </header>
 
