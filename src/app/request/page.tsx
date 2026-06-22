@@ -13,6 +13,14 @@ type InventoryItem = {
   unit_price: string | null;
 };
 
+type OrderLine = {
+  sku: string;
+  item_name: string;
+  unit_type: string;
+  unit_price: number | null;
+  qty: number;
+};
+
 export default function RequestPage() {
   const router = useRouter();
   const [sessionEmail, setSessionEmail] = useState("");
@@ -22,10 +30,10 @@ export default function RequestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     async function init() {
-      // Check session
       const sessionRes = await fetch("/api/auth/session");
       if (!sessionRes.ok) {
         router.push("/");
@@ -34,7 +42,6 @@ export default function RequestPage() {
       const sessionData = (await sessionRes.json()) as { email?: string };
       setSessionEmail(sessionData.email ?? "");
 
-      // Load inventory
       const invRes = await fetch("/api/inventory/master", { cache: "no-store" });
       const invData = (await invRes.json()) as { items?: InventoryItem[] };
       setItems(invData.items ?? []);
@@ -44,34 +51,52 @@ export default function RequestPage() {
     init();
   }, [router]);
 
-  const handleSubmit = async () => {
-    setError("");
-    const lines = items
-      .map((item) => ({ sku: item.sku, qty: parseFloat(quantities[item.sku] ?? "0") || 0 }))
-      .filter((l) => l.qty > 0);
+  const selectedLines: OrderLine[] = items
+    .map((item) => ({
+      sku: item.sku,
+      item_name: item.item_name,
+      unit_type: item.unit_type,
+      unit_price: item.unit_price ? Number(item.unit_price) : null,
+      qty: parseFloat(quantities[item.sku] ?? "0") || 0,
+    }))
+    .filter((l) => l.qty > 0);
 
-    if (lines.length === 0) {
+  const estimatedTotal = selectedLines.reduce(
+    (sum, l) => sum + (l.unit_price ?? 0) * l.qty,
+    0,
+  );
+
+  const handleOpenConfirm = () => {
+    setError("");
+    if (selectedLines.length === 0) {
       setError("Please enter a quantity for at least one item.");
       return;
     }
+    setShowConfirm(true);
+  };
 
+  const handleConfirmSubmit = async () => {
     setSubmitting(true);
+    setError("");
     try {
       const res = await fetch("/api/requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: lines }),
+        body: JSON.stringify({ items: selectedLines.map((l) => ({ sku: l.sku, qty: l.qty })) }),
       });
 
       const data = (await res.json()) as { error?: string };
 
       if (!res.ok) {
+        setShowConfirm(false);
         setError(data.error ?? "Unable to submit request right now.");
         return;
       }
 
+      setShowConfirm(false);
       setSubmitted(true);
     } catch {
+      setShowConfirm(false);
       setError("Unable to submit request right now.");
     } finally {
       setSubmitting(false);
@@ -121,7 +146,7 @@ export default function RequestPage() {
 
       <section className="mx-auto max-w-3xl px-4 py-8">
         <div className="overflow-hidden rounded-lg border border-[#d6c9b0] bg-[#faf6ee]">
-          <div className="bg-[#FFD75E] px-4 py-3">
+          <div className="border-b border-[#d6c9b0] bg-[#f3ead8] px-4 py-3">
             <h2 className="font-bold text-[#2f200f]">Parkview Cafe Request Form</h2>
             <p className="mt-1 text-sm text-[#7a6040]">Enter the quantity you need for each item. Leave blank to skip.</p>
           </div>
@@ -164,17 +189,83 @@ export default function RequestPage() {
 
         <div className="mt-4 flex items-center justify-between">
           <p className="text-sm text-[#7a6040]">
-            {Object.values(quantities).filter((q) => Number(q) > 0).length} item(s) selected
+            {selectedLines.length} item(s) selected
           </p>
           <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="rounded-lg bg-[#c49a3c] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b08930] disabled:bg-[#c9b48a]"
+            onClick={handleOpenConfirm}
+            className="rounded-lg bg-[#c49a3c] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b08930]"
           >
-            {submitting ? "Submitting..." : "Submit Request"}
+            Review & Submit{selectedLines.length > 0 ? ` (${selectedLines.length})` : ""}
           </button>
         </div>
       </section>
+
+      {/* Confirmation modal */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-[#d6c9b0] bg-[#faf6ee] shadow-xl">
+            {/* Modal header */}
+            <div className="border-b border-[#d6c9b0] bg-[#f3ead8] px-6 py-4 rounded-t-2xl">
+              <h2 className="text-base font-bold text-[#2f200f]">Review Your Request</h2>
+              <p className="text-xs text-[#7a6040] mt-0.5">Parkview Cafe → Commissary</p>
+            </div>
+
+            {/* Line items */}
+            <div className="px-6 py-4 max-h-80 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs font-semibold uppercase text-[#7a6040] border-b border-[#e8dfc8]">
+                    <th className="pb-2 text-left">Item</th>
+                    <th className="pb-2 text-right">Qty</th>
+                    <th className="pb-2 text-right">Unit Price</th>
+                    <th className="pb-2 text-right">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e8dfc8]">
+                  {selectedLines.map((line) => (
+                    <tr key={line.sku}>
+                      <td className="py-2.5 pr-4 font-medium text-[#2f200f]">{line.item_name}</td>
+                      <td className="py-2.5 text-right text-[#5c3a18]">{line.qty}</td>
+                      <td className="py-2.5 text-right text-[#5c3a18]">
+                        {line.unit_price != null ? `$${line.unit_price.toFixed(2)}` : "—"}
+                      </td>
+                      <td className="py-2.5 text-right font-semibold text-[#2f200f]">
+                        {line.unit_price != null
+                          ? `$${(line.unit_price * line.qty).toFixed(2)}`
+                          : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Total */}
+            <div className="border-t border-[#d6c9b0] bg-[#f3ead8] px-6 py-3 flex items-center justify-between">
+              <span className="text-sm font-semibold text-[#2f200f]">Estimated Total</span>
+              <span className="text-base font-bold text-[#2f200f]">${estimatedTotal.toFixed(2)}</span>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4">
+              <button
+                onClick={() => setShowConfirm(false)}
+                disabled={submitting}
+                className="rounded-lg border border-[#c9b48a] px-4 py-2 text-sm font-semibold text-[#5c3a18] transition hover:bg-[#ede4d3] disabled:opacity-50"
+              >
+                Go Back
+              </button>
+              <button
+                onClick={handleConfirmSubmit}
+                disabled={submitting}
+                className="rounded-lg bg-[#c49a3c] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#b08930] disabled:bg-[#c9b48a]"
+              >
+                {submitting ? "Submitting..." : "Confirm & Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

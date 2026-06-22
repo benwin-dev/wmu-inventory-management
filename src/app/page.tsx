@@ -446,6 +446,12 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-3">
               <a
+                href="/fulfillment"
+                className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-950"
+              >
+                Fulfillment Queue
+              </a>
+              <a
                 href="/request"
                 className="rounded-lg bg-[#4a2f14] px-3 py-2 text-sm font-semibold text-[#f8e8c5] transition hover:bg-[#5c3a18]"
               >
