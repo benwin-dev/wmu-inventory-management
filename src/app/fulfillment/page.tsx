@@ -57,6 +57,8 @@ export default function FulfillmentPage() {
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -80,6 +82,24 @@ export default function FulfillmentPage() {
     }
     init();
   }, [router]);
+
+  const handleDelete = async (id: number) => {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/fulfillment/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setRequests((prev) => prev.filter((r) => r.id !== id));
+        setConfirmDeleteId(null);
+        if (expandedId === id) setExpandedId(null);
+      } else {
+        setError("Unable to delete request right now.");
+      }
+    } catch {
+      setError("Unable to delete request right now.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const displayed = showAll
     ? requests
@@ -163,6 +183,32 @@ export default function FulfillmentPage() {
                     >
                       {expandedId === req.id ? "Hide items ▲" : "View items ▼"}
                     </button>
+                    {confirmDeleteId === req.id ? (
+                      <span className="flex items-center gap-1 text-sm">
+                        <button
+                          onClick={() => handleDelete(req.id)}
+                          disabled={deletingId === req.id}
+                          className="font-semibold text-red-600 hover:text-red-800 transition disabled:opacity-50"
+                        >
+                          {deletingId === req.id ? "Deleting..." : "Yes"}
+                        </button>
+                        <span className="text-stone-300">/</span>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="font-semibold text-stone-500 hover:text-stone-800 transition"
+                        >
+                          No
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteId(req.id)}
+                        className="text-stone-300 hover:text-red-500 transition cursor-pointer"
+                        title="Delete request"
+                      >
+                        🗑
+                      </button>
+                    )}
                   </div>
                 </div>
 

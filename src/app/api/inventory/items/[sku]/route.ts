@@ -91,12 +91,14 @@ export async function PATCH(
       [body.unit_price ?? null, body.case_price ?? null, sku],
     );
 
-    // Update on-hand balance
+    // Upsert on-hand balance — insert if missing, update if exists
     await pool.query(
-      `UPDATE inventory_balances
-       SET on_hand_qty = $1, updated_at = NOW()
-       WHERE item_id = (SELECT id FROM items WHERE sku = $2)
-         AND location_id = (SELECT id FROM inventory_locations WHERE code = 'COMMISSARY')`,
+      `INSERT INTO inventory_balances (location_id, item_id, on_hand_qty)
+       SELECT l.id, i.id, $1
+       FROM inventory_locations l, items i
+       WHERE l.code = 'COMMISSARY' AND i.sku = $2
+       ON CONFLICT (location_id, item_id)
+       DO UPDATE SET on_hand_qty = EXCLUDED.on_hand_qty, updated_at = NOW()`,
       [body.on_hand_qty ?? 0, sku],
     );
 
