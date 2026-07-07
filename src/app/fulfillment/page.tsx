@@ -59,6 +59,7 @@ export default function FulfillmentPage() {
   const [showAll, setShowAll] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [fulfillingId, setFulfillingId] = useState<number | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -82,6 +83,24 @@ export default function FulfillmentPage() {
     }
     init();
   }, [router]);
+
+  const handleFulfill = async (id: number) => {
+    setFulfillingId(id);
+    try {
+      const res = await fetch(`/api/fulfillment/${id}`, { method: "PATCH" });
+      if (res.ok) {
+        setRequests((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, status: "fulfilled" } : r)),
+        );
+      } else {
+        setError("Unable to fulfill request right now.");
+      }
+    } catch {
+      setError("Unable to fulfill request right now.");
+    } finally {
+      setFulfillingId(null);
+    }
+  };
 
   const handleDelete = async (id: number) => {
     setDeletingId(id);
@@ -183,6 +202,15 @@ export default function FulfillmentPage() {
                     >
                       {expandedId === req.id ? "Hide items ▲" : "View items ▼"}
                     </button>
+                    {req.status === "submitted" && (
+                      <button
+                        onClick={() => handleFulfill(req.id)}
+                        disabled={fulfillingId === req.id}
+                        className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-green-700 disabled:opacity-50"
+                      >
+                        {fulfillingId === req.id ? "Fulfilling..." : "Mark Fulfilled"}
+                      </button>
+                    )}
                     {confirmDeleteId === req.id ? (
                       <span className="flex items-center gap-1 text-sm">
                         <button
