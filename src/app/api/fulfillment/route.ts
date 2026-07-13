@@ -14,6 +14,8 @@ type StockRequest = {
   id: number;
   submitted_at: string;
   submitted_by: string;
+  fulfilled_by: string | null;
+  recorded_by: string | null;
   cafe_name: string;
   status: string;
   item_count: string;
@@ -39,6 +41,8 @@ export async function GET(request: NextRequest) {
          sr.id,
          sr.submitted_at,
          sr.submitted_by,
+         sr.fulfilled_by,
+         sr.recorded_by,
          COALESCE(c.name, 'Unknown') AS cafe_name,
          sr.status,
          sr.notes,
@@ -47,7 +51,7 @@ export async function GET(request: NextRequest) {
        FROM stock_requests sr
        LEFT JOIN cafes c ON c.id = sr.cafe_id
        LEFT JOIN stock_request_lines srl ON srl.stock_request_id = sr.id
-       GROUP BY sr.id, sr.submitted_at, sr.submitted_by, c.name, sr.status, sr.notes, sr.fulfillment_notes
+       GROUP BY sr.id, sr.submitted_at, sr.submitted_by, sr.fulfilled_by, sr.recorded_by, c.name, sr.status, sr.notes, sr.fulfillment_notes
        ORDER BY sr.submitted_at DESC`,
     );
 

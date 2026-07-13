@@ -151,10 +151,10 @@ export async function PATCH(
 
       const result = await client.query(
         `UPDATE stock_requests
-         SET status = $1, fulfillment_notes = $2, updated_at = NOW()
-         WHERE id = $3
+         SET status = $1, fulfillment_notes = $2, fulfilled_by = $3, fulfilled_at = NOW(), updated_at = NOW()
+         WHERE id = $4
          RETURNING id`,
-        [status, fulfillmentNotes, requestId],
+        [status, fulfillmentNotes, session.email, requestId],
       );
 
       if (result.rowCount === 0) {

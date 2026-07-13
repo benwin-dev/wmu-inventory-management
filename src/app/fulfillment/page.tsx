@@ -16,6 +16,8 @@ type StockRequest = {
   id: number;
   submitted_at: string;
   submitted_by: string;
+  fulfilled_by: string | null;
+  recorded_by: string | null;
   cafe_name: string;
   status: string;
   item_count: string;
@@ -37,12 +39,14 @@ function StatusBadge({ status }: { status: string }) {
     fulfilled: "bg-green-100 text-green-800 border-green-200",
     partially_fulfilled: "bg-orange-100 text-orange-700 border-orange-200",
     cancelled: "bg-stone-100 text-stone-500 border-stone-200",
+    recorded: "bg-stone-100 text-stone-500 border-stone-200",
   };
   const labels: Record<string, string> = {
     submitted: "Pending",
     fulfilled: "Fulfilled",
     partially_fulfilled: "Partially Fulfilled",
     cancelled: "Cancelled",
+    recorded: "Recorded",
   };
   const cls = styles[status] ?? "bg-stone-100 text-stone-500 border-stone-200";
   return (
@@ -72,6 +76,24 @@ export default function FulfillmentPage() {
   const [showAll, setShowAll] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const [recordingId, setRecordingId] = useState<number | null>(null);
+
+  const handleRecord = async (id: number) => {
+    setRecordingId(id);
+    try {
+      const res = await fetch(`/api/fulfillment/${id}/record`, { method: "POST" });
+      if (res.ok) {
+        setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: "recorded" } : r));
+      } else {
+        setError("Unable to mark as recorded right now.");
+      }
+    } catch {
+      setError("Unable to mark as recorded right now.");
+    } finally {
+      setRecordingId(null);
+    }
+  };
 
   // Fulfill mode state
   const [fulfillModeId, setFulfillModeId] = useState<number | null>(null);
@@ -275,6 +297,37 @@ export default function FulfillmentPage() {
                         >
                           Mark Fulfilled
                         </button>
+                      )}
+
+                      {(req.status === "fulfilled" || req.status === "partially_fulfilled") && !inFulfillMode && (
+                        <>
+                          <a
+                            href={`/fulfillment/${req.id}/receipt`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-lg border border-[#c49a3c] px-3 py-1.5 text-xs font-semibold text-[#8a6331] transition hover:bg-[#fdf8ec]"
+                          >
+                            Receipt
+                          </a>
+                          <button
+                            onClick={() => handleRecord(req.id)}
+                            disabled={recordingId === req.id}
+                            className="rounded-lg bg-stone-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-stone-900 disabled:opacity-50"
+                          >
+                            {recordingId === req.id ? "Recording..." : "Mark as Recorded"}
+                          </button>
+                        </>
+                      )}
+
+                      {req.status === "recorded" && !inFulfillMode && (
+                        <a
+                          href={`/fulfillment/${req.id}/receipt`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-500 transition hover:bg-stone-50"
+                        >
+                          View Receipt
+                        </a>
                       )}
 
                       {inFulfillMode && (
