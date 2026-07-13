@@ -3,9 +3,11 @@ import { getDbPool } from "@/lib/db";
 import { getSession } from "@/lib/session-store";
 
 type RequestLine = {
+  sku: string;
   item_name: string;
   unit_type: string;
   requested_qty: string;
+  unit_price: string | null;
 };
 
 type StockRequest = {
@@ -16,6 +18,7 @@ type StockRequest = {
   status: string;
   item_count: string;
   notes: string | null;
+  fulfillment_notes: string | null;
   lines: RequestLine[];
 };
 
@@ -39,11 +42,12 @@ export async function GET(request: NextRequest) {
          COALESCE(c.name, 'Unknown') AS cafe_name,
          sr.status,
          sr.notes,
+         sr.fulfillment_notes,
          COUNT(srl.id)::text AS item_count
        FROM stock_requests sr
        LEFT JOIN cafes c ON c.id = sr.cafe_id
        LEFT JOIN stock_request_lines srl ON srl.stock_request_id = sr.id
-       GROUP BY sr.id, sr.submitted_at, sr.submitted_by, c.name, sr.status, sr.notes
+       GROUP BY sr.id, sr.submitted_at, sr.submitted_by, c.name, sr.status, sr.notes, sr.fulfillment_notes
        ORDER BY sr.submitted_at DESC`,
     );
 
@@ -51,9 +55,17 @@ export async function GET(request: NextRequest) {
     const lineResult = await pool.query<RequestLine & { stock_request_id: number }>(
       `SELECT
          srl.stock_request_id,
+         i.sku,
          i.name AS item_name,
          i.unit_type,
-         srl.requested_qty::text
+         srl.requested_qty::text,
+         (
+           SELECT ip.price_per_unit::text
+           FROM item_prices ip
+           WHERE ip.item_id = i.id AND ip.effective_to IS NULL
+           ORDER BY ip.effective_from DESC
+           LIMIT 1
+         ) AS unit_price
        FROM stock_request_lines srl
        JOIN items i ON i.id = srl.item_id
        ORDER BY srl.id ASC`,
