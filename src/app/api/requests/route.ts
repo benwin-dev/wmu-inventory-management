@@ -13,9 +13,11 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as {
       items: { sku: string; qty: number }[];
+      notes?: string;
     };
 
     const lines = (body.items ?? []).filter((l) => l.qty > 0);
+    const notes = body.notes?.trim() || null;
 
     if (lines.length === 0) {
       return NextResponse.json({ error: "Add at least one item to your request." }, { status: 400 });
@@ -25,11 +27,11 @@ export async function POST(request: NextRequest) {
 
     // Create the stock request for Parkview
     const reqResult = await pool.query<{ id: number }>(
-      `INSERT INTO stock_requests (cafe_id, request_date, status, submitted_by, submitted_at)
-       SELECT id, CURRENT_DATE, 'submitted', $1, NOW()
+      `INSERT INTO stock_requests (cafe_id, request_date, status, submitted_by, submitted_at, notes)
+       SELECT id, CURRENT_DATE, 'submitted', $1, NOW(), $2
        FROM cafes WHERE code = 'PARKVIEW'
        RETURNING id`,
-      [session.email],
+      [session.email, notes],
     );
 
     const requestId = reqResult.rows[0].id;

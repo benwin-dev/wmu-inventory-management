@@ -15,6 +15,7 @@ type StockRequest = {
   cafe_name: string;
   status: string;
   item_count: string;
+  notes: string | null;
   lines: RequestLine[];
 };
 
@@ -37,11 +38,12 @@ export async function GET(request: NextRequest) {
          sr.submitted_by,
          COALESCE(c.name, 'Unknown') AS cafe_name,
          sr.status,
+         sr.notes,
          COUNT(srl.id)::text AS item_count
        FROM stock_requests sr
        LEFT JOIN cafes c ON c.id = sr.cafe_id
        LEFT JOIN stock_request_lines srl ON srl.stock_request_id = sr.id
-       GROUP BY sr.id, sr.submitted_at, sr.submitted_by, c.name, sr.status
+       GROUP BY sr.id, sr.submitted_at, sr.submitted_by, c.name, sr.status, sr.notes
        ORDER BY sr.submitted_at DESC`,
     );
 

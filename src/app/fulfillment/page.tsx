@@ -17,6 +17,7 @@ type StockRequest = {
   cafe_name: string;
   status: string;
   item_count: string;
+  notes: string | null;
   lines: RequestLine[];
 };
 
@@ -239,6 +240,14 @@ export default function FulfillmentPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Notes */}
+                {req.notes && (
+                  <div className="border-t border-stone-100 px-5 py-2.5 bg-amber-50">
+                    <span className="text-xs font-semibold uppercase text-[#7a6040]">Note: </span>
+                    <span className="text-sm text-[#2f200f]">{req.notes}</span>
+                  </div>
+                )}
 
                 {/* Expanded line items */}
                 {expandedId === req.id && (

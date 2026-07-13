@@ -21,15 +21,25 @@ type OrderLine = {
   qty: number;
 };
 
+type ValidationIssue = {
+  sku: string;
+  item_name: string;
+  requested_qty: number;
+  on_hand_qty: number;
+};
+
 export default function RequestPage() {
   const router = useRouter();
   const [sessionEmail, setSessionEmail] = useState("");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
+  const [validating, setValidating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
   const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
@@ -47,7 +57,6 @@ export default function RequestPage() {
       setItems(invData.items ?? []);
       setLoading(false);
     }
-
     init();
   }, [router]);
 
@@ -66,13 +75,41 @@ export default function RequestPage() {
     0,
   );
 
-  const handleOpenConfirm = () => {
+  const handleOpenConfirm = async () => {
     setError("");
+    setValidationIssues([]);
+
     if (selectedLines.length === 0) {
       setError("Please enter a quantity for at least one item.");
       return;
     }
-    setShowConfirm(true);
+
+    setValidating(true);
+    try {
+      const res = await fetch("/api/requests/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: selectedLines.map((l) => ({ sku: l.sku, qty: l.qty })) }),
+      });
+
+      const data = (await res.json()) as { issues?: ValidationIssue[]; error?: string };
+
+      if (!res.ok) {
+        setError(data.error ?? "Unable to validate request right now.");
+        return;
+      }
+
+      if (data.issues && data.issues.length > 0) {
+        setValidationIssues(data.issues);
+        return;
+      }
+
+      setShowConfirm(true);
+    } catch {
+      setError("Unable to validate request right now.");
+    } finally {
+      setValidating(false);
+    }
   };
 
   const handleConfirmSubmit = async () => {
@@ -82,7 +119,10 @@ export default function RequestPage() {
       const res = await fetch("/api/requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: selectedLines.map((l) => ({ sku: l.sku, qty: l.qty })) }),
+        body: JSON.stringify({
+          items: selectedLines.map((l) => ({ sku: l.sku, qty: l.qty })),
+          notes: notes.trim() || null,
+        }),
       });
 
       const data = (await res.json()) as { error?: string };
@@ -119,7 +159,7 @@ export default function RequestPage() {
           <h2 className="mt-4 text-xl font-semibold text-[#2f200f]">Request Submitted!</h2>
           <p className="mt-2 text-sm text-[#7a6040]">Your request has been sent to the Commissary.</p>
           <button
-            onClick={() => { setSubmitted(false); setQuantities({}); }}
+            onClick={() => { setSubmitted(false); setQuantities({}); setNotes(""); setValidationIssues([]); }}
             className="mt-6 rounded-lg bg-[#c49a3c] px-5 py-2 text-sm font-semibold text-white hover:bg-[#b08930]"
           >
             Submit Another Request
@@ -161,31 +201,84 @@ export default function RequestPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e8dfc8]">
-              {items.map((item) => (
-                <tr key={item.sku} className={quantities[item.sku] && Number(quantities[item.sku]) > 0 ? "bg-[#fdf3d8]" : ""}>
-                  <td className="px-4 py-3 font-medium text-[#2f200f]">{item.item_name}</td>
-                  <td className="px-4 py-3 text-[#5c3a18]">
-                    {item.unit_price ? `$${Number(item.unit_price).toFixed(2)}` : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-[#7a6040]">{item.unit_type}</td>
-                  <td className="px-4 py-3">
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={quantities[item.sku] ?? ""}
-                      onChange={(e) => setQuantities((prev) => ({ ...prev, [item.sku]: e.target.value }))}
-                      placeholder="0"
-                      className="w-24 rounded-lg border border-[#c9b48a] px-3 py-1.5 text-sm outline-none focus:border-[#c49a3c] focus:ring-2 focus:ring-[#c49a3c44]"
-                    />
-                  </td>
-                </tr>
-              ))}
+              {items.map((item) => {
+                const hasIssue = validationIssues.some((i) => i.sku === item.sku);
+                return (
+                  <tr
+                    key={item.sku}
+                    className={
+                      hasIssue
+                        ? "bg-red-50"
+                        : quantities[item.sku] && Number(quantities[item.sku]) > 0
+                        ? "bg-[#fdf3d8]"
+                        : ""
+                    }
+                  >
+                    <td className="px-4 py-3 font-medium text-[#2f200f]">{item.item_name}</td>
+                    <td className="px-4 py-3 text-[#5c3a18]">
+                      {item.unit_price ? `$${Number(item.unit_price).toFixed(2)}` : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-[#7a6040]">{item.unit_type}</td>
+                    <td className="px-4 py-3">
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={quantities[item.sku] ?? ""}
+                        onChange={(e) => {
+                          setQuantities((prev) => ({ ...prev, [item.sku]: e.target.value }));
+                          if (hasIssue) setValidationIssues((prev) => prev.filter((i) => i.sku !== item.sku));
+                        }}
+                        placeholder="0"
+                        className={`w-24 rounded-lg border px-3 py-1.5 text-sm outline-none focus:ring-2 ${
+                          hasIssue
+                            ? "border-red-400 focus:border-red-500 focus:ring-red-200"
+                            : "border-[#c9b48a] focus:border-[#c49a3c] focus:ring-[#c49a3c44]"
+                        }`}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
-        {!!error && <p className="mt-4 text-sm font-medium text-red-700">{error}</p>}
+        {/* Validation alert */}
+        {validationIssues.length > 0 && (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+            <p className="text-sm font-semibold text-red-700 mb-2">
+              ⚠ Some quantities exceed available stock — please adjust before submitting:
+            </p>
+            <ul className="space-y-1">
+              {validationIssues.map((issue) => (
+                <li key={issue.sku} className="text-sm text-red-600">
+                  <span className="font-medium">{issue.item_name}</span>
+                  {" — "}
+                  {issue.on_hand_qty === 0
+                    ? "none in stock (0 available)"
+                    : `you requested ${issue.requested_qty}, only ${issue.on_hand_qty} in stock`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Notes field */}
+        <div className="mt-4">
+          <label className="block text-sm font-semibold text-[#2f200f] mb-1.5">
+            Notes <span className="font-normal text-[#7a6040]">(optional)</span>
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Add any notes for the Commissary — e.g. need by Friday morning, urgent, etc."
+            rows={3}
+            className="w-full rounded-lg border border-[#c9b48a] bg-[#faf6ee] px-3 py-2 text-sm text-[#2f200f] outline-none resize-none focus:border-[#c49a3c] focus:ring-2 focus:ring-[#c49a3c44] placeholder:text-[#b0956a]"
+          />
+        </div>
+
+        {!!error && <p className="mt-3 text-sm font-medium text-red-700">{error}</p>}
 
         <div className="mt-4 flex items-center justify-between">
           <p className="text-sm text-[#7a6040]">
@@ -193,9 +286,10 @@ export default function RequestPage() {
           </p>
           <button
             onClick={handleOpenConfirm}
-            className="rounded-lg bg-[#c49a3c] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b08930]"
+            disabled={validating}
+            className="rounded-lg bg-[#c49a3c] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b08930] disabled:bg-[#c9b48a]"
           >
-            Review & Submit{selectedLines.length > 0 ? ` (${selectedLines.length})` : ""}
+            {validating ? "Checking stock..." : `Review & Submit${selectedLines.length > 0 ? ` (${selectedLines.length})` : ""}`}
           </button>
         </div>
       </section>
@@ -211,7 +305,7 @@ export default function RequestPage() {
             </div>
 
             {/* Line items */}
-            <div className="px-6 py-4 max-h-80 overflow-y-auto">
+            <div className="px-6 py-4 max-h-64 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs font-semibold uppercase text-[#7a6040] border-b border-[#e8dfc8]">
@@ -230,9 +324,7 @@ export default function RequestPage() {
                         {line.unit_price != null ? `$${line.unit_price.toFixed(2)}` : "—"}
                       </td>
                       <td className="py-2.5 text-right font-semibold text-[#2f200f]">
-                        {line.unit_price != null
-                          ? `$${(line.unit_price * line.qty).toFixed(2)}`
-                          : "—"}
+                        {line.unit_price != null ? `$${(line.unit_price * line.qty).toFixed(2)}` : "—"}
                       </td>
                     </tr>
                   ))}
@@ -245,6 +337,30 @@ export default function RequestPage() {
               <span className="text-sm font-semibold text-[#2f200f]">Estimated Total</span>
               <span className="text-base font-bold text-[#2f200f]">${estimatedTotal.toFixed(2)}</span>
             </div>
+
+            {/* Notes in modal */}
+            {notes.trim() && (
+              <div className="px-6 py-3 border-t border-[#d6c9b0]">
+                <p className="text-xs font-semibold uppercase text-[#7a6040] mb-1">Notes</p>
+                <p className="text-sm text-[#2f200f]">{notes.trim()}</p>
+              </div>
+            )}
+
+            {/* Notes textarea in modal (editable) */}
+            {!notes.trim() && (
+              <div className="px-6 py-3 border-t border-[#d6c9b0]">
+                <label className="block text-xs font-semibold uppercase text-[#7a6040] mb-1">
+                  Add a note <span className="normal-case font-normal">(optional)</span>
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Any notes for the Commissary?"
+                  rows={2}
+                  className="w-full rounded-lg border border-[#c9b48a] bg-white px-3 py-2 text-sm text-[#2f200f] outline-none resize-none focus:border-[#c49a3c] focus:ring-2 focus:ring-[#c49a3c44] placeholder:text-[#b0956a]"
+                />
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex items-center justify-end gap-3 px-6 py-4">

@@ -1,0 +1,1 @@
+ALTER TABLE stock_requests ADD COLUMN IF NOT EXISTS notes TEXT;
