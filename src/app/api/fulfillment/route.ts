@@ -7,6 +7,7 @@ type RequestLine = {
   item_name: string;
   unit_type: string;
   requested_qty: string;
+  fulfilled_qty: string | null;
   unit_price: string | null;
 };
 
@@ -63,6 +64,7 @@ export async function GET(request: NextRequest) {
          i.name AS item_name,
          i.unit_type,
          srl.requested_qty::text,
+         srl.fulfilled_qty::text,
          (
            SELECT ip.price_per_unit::text
            FROM item_prices ip

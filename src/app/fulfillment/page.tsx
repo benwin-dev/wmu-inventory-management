@@ -9,6 +9,7 @@ type RequestLine = {
   item_name: string;
   unit_type: string;
   requested_qty: string;
+  fulfilled_qty: string | null;
   unit_price: string | null;
 };
 
@@ -260,7 +261,8 @@ export default function FulfillmentPage() {
               const inFulfillMode = fulfillModeId === req.id;
               const requestTotal = req.lines.reduce((sum, l) => {
                 const price = l.unit_price ? parseFloat(l.unit_price) : null;
-                return price != null ? sum + price * parseFloat(l.requested_qty) : sum;
+                const qty = l.fulfilled_qty != null ? parseFloat(l.fulfilled_qty) : parseFloat(l.requested_qty);
+                return price != null ? sum + price * qty : sum;
               }, 0);
               const hasPrices = req.lines.some((l) => l.unit_price != null);
               return (
@@ -390,21 +392,33 @@ export default function FulfillmentPage() {
                             <th className="px-5 py-2.5 text-left font-semibold">Item</th>
                             <th className="px-5 py-2.5 text-left font-semibold">Unit</th>
                             <th className="px-5 py-2.5 text-right font-semibold">Unit Price</th>
-                            <th className="px-5 py-2.5 text-right font-semibold">Qty</th>
+                            <th className="px-5 py-2.5 text-right font-semibold">Requested</th>
+                            {req.lines.some((l) => l.fulfilled_qty != null) && (
+                              <th className="px-5 py-2.5 text-right font-semibold">Fulfilled</th>
+                            )}
                             <th className="px-5 py-2.5 text-right font-semibold">Subtotal</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-stone-100">
                           {req.lines.map((line, i) => {
                             const price = line.unit_price ? parseFloat(line.unit_price) : null;
-                            const qty = parseFloat(line.requested_qty);
-                            const subtotal = price != null ? price * qty : null;
+                            const requestedQty = parseFloat(line.requested_qty);
+                            const fulfilledQty = line.fulfilled_qty != null ? parseFloat(line.fulfilled_qty) : null;
+                            const displayQty = fulfilledQty ?? requestedQty;
+                            const subtotal = price != null ? price * displayQty : null;
+                            const isShort = fulfilledQty != null && fulfilledQty < requestedQty;
+                            const hasFulfilledCol = req.lines.some((l) => l.fulfilled_qty != null);
                             return (
-                              <tr key={i}>
+                              <tr key={i} className={isShort ? "bg-orange-50" : ""}>
                                 <td className="px-5 py-2.5 font-medium text-stone-900">{line.item_name}</td>
                                 <td className="px-5 py-2.5 text-stone-500">{line.unit_type}</td>
                                 <td className="px-5 py-2.5 text-right text-stone-500">{price != null ? `$${price.toFixed(2)}` : "—"}</td>
-                                <td className="px-5 py-2.5 text-right font-semibold text-[#2f200f]">{qty}</td>
+                                <td className="px-5 py-2.5 text-right text-stone-400">{requestedQty}</td>
+                                {hasFulfilledCol && (
+                                  <td className={`px-5 py-2.5 text-right font-semibold ${isShort ? "text-orange-600" : "text-[#2f200f]"}`}>
+                                    {fulfilledQty ?? "—"}
+                                  </td>
+                                )}
                                 <td className="px-5 py-2.5 text-right font-semibold text-[#2f200f]">{subtotal != null ? `$${subtotal.toFixed(2)}` : "—"}</td>
                               </tr>
                             );
@@ -413,7 +427,9 @@ export default function FulfillmentPage() {
                         {hasPrices && (
                           <tfoot className="border-t border-stone-200 bg-[#f3ead8]">
                             <tr>
-                              <td colSpan={4} className="px-5 py-2.5 text-right text-sm font-semibold text-[#5c3a18]">Estimated Total</td>
+                              <td colSpan={req.lines.some((l) => l.fulfilled_qty != null) ? 5 : 4} className="px-5 py-2.5 text-right text-sm font-semibold text-[#5c3a18]">
+                                {req.lines.some((l) => l.fulfilled_qty != null) ? "Fulfilled Total" : "Estimated Total"}
+                              </td>
                               <td className="px-5 py-2.5 text-right text-sm font-bold text-[#2f200f]">${requestTotal.toFixed(2)}</td>
                             </tr>
                           </tfoot>
