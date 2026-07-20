@@ -662,9 +662,9 @@ export default function Home() {
                       <option value="bag">bag</option>
                       <option value="box">box</option>
                     </select>
-                    {addForm.unit_type === "case" && (
-                      <p className="mt-1 text-xs text-stone-400">Tracking as whole cases. Units per case auto-set to 1.</p>
-                    )}
+                    {addForm.unit_type === "case" 
+                    // && (<p className="mt-1 text-xs text-stone-400">Tracking as whole cases. Units per case set to 1.</p>)
+                    }
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-stone-700">Units Per Case</label>
@@ -812,9 +812,11 @@ export default function Home() {
                       <option value="bag">bag</option>
                       <option value="box">box</option>
                     </select>
-                    {editForm.unit_type === "case" && (
-                      <p className="mt-1 text-xs text-stone-400">Tracking as whole cases. Units per case auto-set to 1.</p>
-                    )}
+                    {editForm.unit_type === "case" 
+                      // && (
+                      //   <p className="mt-1 text-xs text-stone-400">Tracking as whole cases. Units per case set to 1.</p>
+                      // )
+                    }
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-stone-700">Units Per Case</label>
