@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
 import { getSession } from "@/lib/session-store";
+import { logAudit } from "@/lib/audit";
 
 export async function DELETE(
   request: NextRequest,
@@ -29,6 +30,8 @@ export async function DELETE(
     if (result.rowCount === 0) {
       return NextResponse.json({ error: "Request not found." }, { status: 404 });
     }
+
+    await logAudit(session.email, "request_deleted", "stock_request", requestId, { request_id: requestId });
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
@@ -175,6 +178,13 @@ export async function PATCH(
     } finally {
       client.release();
     }
+
+    await logAudit(session.email, "request_fulfilled", "stock_request", requestId, {
+      request_id: requestId,
+      status,
+      fulfilled_by_name: fulfilledByName,
+      lines,
+    });
 
     return NextResponse.json({ ok: true, status }, { status: 200 });
   } catch (error) {

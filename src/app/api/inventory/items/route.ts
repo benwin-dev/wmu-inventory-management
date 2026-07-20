@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
 import { getSession } from "@/lib/session-store";
+import { logAudit } from "@/lib/audit";
 
 function generateSku(name: string): string {
   return name
@@ -90,7 +91,17 @@ export async function POST(request: NextRequest) {
       [sku, name, unit_type, units_per_case, unit_price, case_price, on_hand_qty],
     );
 
-    return NextResponse.json({ item: result.rows[0] }, { status: 201 });
+    const item = result.rows[0];
+    await logAudit(session.email, "item_added", "item", item.sku, {
+      sku: item.sku,
+      name: item.item_name,
+      unit_type: item.unit_type,
+      on_hand_qty,
+      unit_price,
+      case_price,
+    });
+
+    return NextResponse.json({ item }, { status: 201 });
   } catch (error: unknown) {
     console.error("Failed to create item", error);
     return NextResponse.json({ error: "Unable to add item right now." }, { status: 500 });

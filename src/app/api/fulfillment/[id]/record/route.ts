@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
 import { getSession } from "@/lib/session-store";
+import { logAudit } from "@/lib/audit";
 
 export async function POST(
   request: NextRequest,
@@ -35,6 +36,11 @@ export async function POST(
     if (result.rowCount === 0) {
       return NextResponse.json({ error: "Request not found or not in a fulfillable state." }, { status: 404 });
     }
+
+    await logAudit(session.email, "request_recorded", "stock_request", requestId, {
+      request_id: requestId,
+      recorded_by_name: recordedByName,
+    });
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {

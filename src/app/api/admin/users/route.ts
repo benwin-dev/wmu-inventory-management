@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
 import { requireRole } from "@/lib/require-role";
+import { logAudit } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
   const { session, error } = requireRole(request, ["admin"]);
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
        RETURNING id, email, role, created_at`,
       [email, role],
     );
+    await logAudit(session!.email, "access_granted", "user_access", email, { target_email: email, role });
     return NextResponse.json({ user: result.rows[0] }, { status: 201 });
   } catch (err) {
     console.error("Failed to add user", err);
@@ -72,5 +74,6 @@ export async function DELETE(request: NextRequest) {
 
   const pool = getDbPool();
   await pool.query(`DELETE FROM user_roles WHERE email = $1`, [email]);
+  await logAudit(session!.email, "access_revoked", "user_access", email, { target_email: email });
   return NextResponse.json({ ok: true }, { status: 200 });
 }

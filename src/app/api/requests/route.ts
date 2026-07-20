@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
 import { getSession } from "@/lib/session-store";
+import { logAudit } from "@/lib/audit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,6 +56,14 @@ export async function POST(request: NextRequest) {
         [requestId, line.qty, line.sku],
       );
     }
+
+    await logAudit(session.email, "request_created", "stock_request", requestId, {
+      request_id: requestId,
+      cafe_code: cafeCode,
+      requested_by_name: requestedByName,
+      item_count: lines.length,
+      items: lines,
+    });
 
     return NextResponse.json({ ok: true, requestId }, { status: 201 });
   } catch (error) {

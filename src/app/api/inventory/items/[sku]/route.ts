@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
 import { getSession } from "@/lib/session-store";
+import { logAudit } from "@/lib/audit";
 
 export async function DELETE(
   request: NextRequest,
@@ -48,6 +49,8 @@ export async function DELETE(
     if (result.rowCount === 0) {
       return NextResponse.json({ error: "Item not found." }, { status: 404 });
     }
+
+    await logAudit(session.email, "item_deleted", "item", sku, { sku });
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
@@ -127,7 +130,18 @@ export async function PATCH(
       [sku],
     );
 
-    return NextResponse.json({ item: result.rows[0] }, { status: 200 });
+    const item = result.rows[0];
+    await logAudit(session.email, "item_edited", "item", sku, {
+      sku,
+      name: body.name,
+      unit_type: body.unit_type,
+      units_per_case: body.units_per_case,
+      on_hand_qty: body.on_hand_qty,
+      unit_price: body.unit_price,
+      case_price: body.case_price,
+    });
+
+    return NextResponse.json({ item }, { status: 200 });
   } catch (error) {
     console.error("Failed to update item", error);
     return NextResponse.json({ error: "Unable to update item right now." }, { status: 500 });

@@ -130,6 +130,7 @@ export default function AdminPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {/* <a href="/admin/audit" className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-stone-700 hover:border-stone-400 transition">Audit Log</a> */}
             <a href="/" className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-stone-700 hover:border-stone-400 transition">Dashboard</a>
             <p className="text-sm text-stone-500">{sessionEmail}</p>
             <SignOutButton />
