@@ -34,6 +34,12 @@ export async function DELETE(
       [sku],
     );
 
+    await pool.query(
+      `WITH target AS (SELECT id FROM items WHERE sku = $1)
+       DELETE FROM stock_request_lines WHERE item_id IN (SELECT id FROM target)`,
+      [sku],
+    );
+
     const result = await pool.query(
       `DELETE FROM items WHERE sku = $1 RETURNING sku`,
       [sku],
