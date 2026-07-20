@@ -2,8 +2,11 @@ import crypto from "crypto";
 
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
 
+export type UserRole = "admin" | "commissary" | "cafe" | "driver";
+
 type SessionRecord = {
   email: string;
+  role: UserRole;
   expiresAt: number;
 };
 
@@ -23,13 +26,14 @@ function cleanupExpiredSessions() {
   }
 }
 
-export function createSession(email: string) {
+export function createSession(email: string, role: UserRole = "cafe") {
   cleanupExpiredSessions();
 
   const token = crypto.randomBytes(32).toString("hex");
 
   sessions.set(token, {
     email,
+    role,
     expiresAt: now() + SESSION_MAX_AGE_MS,
   });
 
@@ -61,4 +65,12 @@ export function deleteSession(token?: string) {
   }
 
   sessions.delete(token);
+}
+
+export function updateSessionRole(token: string, role: UserRole) {
+  const session = sessions.get(token);
+  if (!session) return false;
+  session.role = role;
+  sessions.set(token, session);
+  return true;
 }

@@ -15,11 +15,13 @@ export async function POST(request: NextRequest) {
       items: { sku: string; qty: number }[];
       notes?: string;
       requested_by_name?: string;
+      cafe_code?: string;
     };
 
     const lines = (body.items ?? []).filter((l) => l.qty > 0);
     const notes = body.notes?.trim() || null;
     const requestedByName = body.requested_by_name?.trim() || null;
+    const cafeCode = body.cafe_code?.trim() || null;
 
     if (lines.length === 0) {
       return NextResponse.json({ error: "Add at least one item to your request." }, { status: 400 });
@@ -29,14 +31,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Please enter your name before submitting." }, { status: 400 });
     }
 
+    if (!cafeCode) {
+      return NextResponse.json({ error: "Please select a cafe before submitting." }, { status: 400 });
+    }
+
     const pool = getDbPool();
 
     const reqResult = await pool.query<{ id: number }>(
       `INSERT INTO stock_requests (cafe_id, request_date, status, submitted_by, submitted_at, notes, requested_by_name)
        SELECT id, CURRENT_DATE, 'submitted', $1, NOW(), $2, $3
-       FROM cafes WHERE code = 'PARKVIEW'
+       FROM cafes WHERE code = $4 AND active = TRUE
        RETURNING id`,
-      [session.email, notes, requestedByName],
+      [session.email, notes, requestedByName, cafeCode],
     );
 
     const requestId = reqResult.rows[0].id;

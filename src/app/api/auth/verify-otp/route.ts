@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyOtp } from "@/lib/otp-store";
-import { createSession } from "@/lib/session-store";
+import { createSession, UserRole } from "@/lib/session-store";
+import { getDbPool } from "@/lib/db";
 
 const WMU_DOMAIN = "wmich.edu";
 
@@ -38,8 +39,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid or expired verification code." }, { status: 401 });
     }
 
-    const session = createSession(result.email);
-    const response = NextResponse.json({ email: result.email }, { status: 200 });
+    // Look up role from DB
+    const pool = getDbPool();
+    const roleResult = await pool.query<{ role: string }>(
+      `SELECT role FROM user_roles WHERE email = $1`,
+      [result.email],
+    );
+
+    if (roleResult.rows.length === 0) {
+      return NextResponse.json({ error: "Your account has not been granted access. Please contact your administrator." }, { status: 403 });
+    }
+
+    const role = roleResult.rows[0].role as UserRole;
+    const redirectMap: Record<UserRole, string> = {
+      admin: "/admin",
+      commissary: "/",
+      cafe: "/request",
+      driver: "/fulfillment",
+    };
+
+    const session = createSession(result.email, role);
+    const response = NextResponse.json({ email: result.email, role, redirect: redirectMap[role] }, { status: 200 });
 
     response.cookies.set({
       name: "wmu_inventory_session",

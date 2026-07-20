@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import SignOutButton from "@/components/SignOutButton";
 
 type RequestLine = {
   sku: string;
@@ -73,6 +74,7 @@ function formatDate(iso: string) {
 export default function FulfillmentPage() {
   const router = useRouter();
   const [sessionEmail, setSessionEmail] = useState("");
+  const [sessionRole, setSessionRole] = useState("");
   const [requests, setRequests] = useState<StockRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -124,8 +126,12 @@ export default function FulfillmentPage() {
     async function init() {
       const sessionRes = await fetch("/api/auth/session");
       if (!sessionRes.ok) { router.push("/"); return; }
-      const sessionData = (await sessionRes.json()) as { email?: string };
+      const sessionData = (await sessionRes.json()) as { email?: string; role?: string };
+      if (!["admin", "commissary", "cafe", "driver"].includes(sessionData.role ?? "")) {
+        router.push("/"); return;
+      }
       setSessionEmail(sessionData.email ?? "");
+      setSessionRole(sessionData.role ?? "");
 
       const res = await fetch("/api/fulfillment", { cache: "no-store" });
       if (!res.ok) { setError("Unable to load requests right now."); setLoading(false); return; }
@@ -253,6 +259,7 @@ export default function FulfillmentPage() {
               Dashboard
             </a>
             <p className="text-sm text-stone-500">{sessionEmail}</p>
+            <SignOutButton />
           </div>
         </div>
       </header>
@@ -280,6 +287,7 @@ export default function FulfillmentPage() {
           <div className="flex flex-col gap-3">
             {displayed.map((req) => {
               const inFulfillMode = fulfillModeId === req.id;
+              const canEdit = ["admin", "commissary", "driver"].includes(sessionRole);
               const requestTotal = req.lines.reduce((sum, l) => {
                 const price = l.unit_price ? parseFloat(l.unit_price) : null;
                 const qty = l.fulfilled_qty != null ? parseFloat(l.fulfilled_qty) : parseFloat(l.requested_qty);
@@ -313,7 +321,7 @@ export default function FulfillmentPage() {
                         </button>
                       )}
 
-                      {req.status === "submitted" && !inFulfillMode && (
+                      {req.status === "submitted" && !inFulfillMode && canEdit && (
                         <button
                           onClick={() => openFulfillMode(req)}
                           className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-green-700"
@@ -322,7 +330,7 @@ export default function FulfillmentPage() {
                         </button>
                       )}
 
-                      {(req.status === "fulfilled" || req.status === "partially_fulfilled") && !inFulfillMode && (
+                      {(req.status === "fulfilled" || req.status === "partially_fulfilled") && !inFulfillMode && canEdit && (
                         <>
                           <a
                             href={`/fulfillment/${req.id}/receipt`}
@@ -361,7 +369,7 @@ export default function FulfillmentPage() {
                         </button>
                       )}
 
-                      {confirmDeleteId === req.id ? (
+                      {canEdit && confirmDeleteId === req.id ? (
                         <span className="flex items-center gap-1 text-sm">
                           <button
                             onClick={() => handleDelete(req.id)}
@@ -375,7 +383,7 @@ export default function FulfillmentPage() {
                             No
                           </button>
                         </span>
-                      ) : (
+                      ) : canEdit ? (
                         <button
                           onClick={() => setConfirmDeleteId(req.id)}
                           className="text-stone-300 hover:text-red-500 transition cursor-pointer"
@@ -383,7 +391,7 @@ export default function FulfillmentPage() {
                         >
                           🗑
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
 

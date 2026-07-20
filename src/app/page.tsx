@@ -134,9 +134,12 @@ export default function Home() {
           return;
         }
 
-        const data = (await response.json()) as { email?: string };
+        const data = (await response.json()) as { email?: string; role?: string };
 
         if (isMounted && data.email) {
+          // Redirect non-commissary/admin roles away from the dashboard
+          if (data.role === "cafe") { window.location.href = "/request"; return; }
+          if (data.role === "driver") { window.location.href = "/fulfillment"; return; }
           setSignedInEmail(data.email);
           setAuthStep("app");
         }
@@ -220,10 +223,15 @@ export default function Home() {
         body: JSON.stringify({ email: normalizedEmail, otp }),
       });
 
-      const data = (await response.json()) as { error?: string; email?: string };
+      const data = (await response.json()) as { error?: string; email?: string; role?: string; redirect?: string };
 
       if (!response.ok) {
         setError(data.error || "Unable to verify code right now.");
+        return;
+      }
+
+      if (data.redirect && data.redirect !== "/") {
+        window.location.href = data.redirect;
         return;
       }
 
@@ -235,6 +243,7 @@ export default function Home() {
       setIsSubmitting(false);
     }
   };
+
 
   const resetRequestState = () => {
     setAuthStep("request");
@@ -952,6 +961,7 @@ export default function Home() {
             </button>
           </form>
         )}
+
       </section>
     </main>
   );

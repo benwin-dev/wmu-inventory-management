@@ -9,5 +9,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 
-  return NextResponse.json({ authenticated: true, email: session.email }, { status: 200 });
+  return NextResponse.json({ authenticated: true, email: session.email, role: session.role }, { status: 200 });
 }

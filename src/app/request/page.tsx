@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import SignOutButton from "@/components/SignOutButton";
 
 type InventoryItem = {
   sku: string;
@@ -28,14 +29,17 @@ type ValidationIssue = {
   on_hand_qty: number;
 };
 
+type Cafe = { id: number; code: string; name: string };
+
 export default function RequestPage() {
   const router = useRouter();
   const [sessionEmail, setSessionEmail] = useState("");
+  const [cafes, setCafes] = useState<Cafe[]>([]);
+  const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
   const [requesterName, setRequesterName] = useState("");
-  const [nameError, setNameError] = useState("");
   const [loading, setLoading] = useState(true);
   const [validating, setValidating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -47,15 +51,17 @@ export default function RequestPage() {
   useEffect(() => {
     async function init() {
       const sessionRes = await fetch("/api/auth/session");
-      if (!sessionRes.ok) {
-        router.push("/");
-        return;
-      }
-      const sessionData = (await sessionRes.json()) as { email?: string };
+      if (!sessionRes.ok) { router.push("/"); return; }
+      const sessionData = (await sessionRes.json()) as { email?: string; role?: string };
       setSessionEmail(sessionData.email ?? "");
 
-      const invRes = await fetch("/api/inventory/master", { cache: "no-store" });
+      const [cafesRes, invRes] = await Promise.all([
+        fetch("/api/cafes", { cache: "no-store" }),
+        fetch("/api/inventory/master", { cache: "no-store" }),
+      ]);
+      const cafesData = (await cafesRes.json()) as { cafes?: Cafe[] };
       const invData = (await invRes.json()) as { items?: InventoryItem[] };
+      setCafes(cafesData.cafes ?? []);
       setItems(invData.items ?? []);
       setLoading(false);
     }
@@ -80,6 +86,16 @@ export default function RequestPage() {
   const handleOpenConfirm = async () => {
     setError("");
     setValidationIssues([]);
+
+    if (!selectedCafe) {
+      setError("Please select your cafe before submitting.");
+      return;
+    }
+
+    if (!requesterName.trim()) {
+      setError("Please enter your name before submitting.");
+      return;
+    }
 
     if (selectedLines.length === 0) {
       setError("Please enter a quantity for at least one item.");
@@ -115,11 +131,6 @@ export default function RequestPage() {
   };
 
   const handleConfirmSubmit = async () => {
-    if (!requesterName.trim()) {
-      setNameError("Please enter your name.");
-      return;
-    }
-    setNameError("");
     setSubmitting(true);
     setError("");
     try {
@@ -130,6 +141,7 @@ export default function RequestPage() {
           items: selectedLines.map((l) => ({ sku: l.sku, qty: l.qty })),
           notes: notes.trim() || null,
           requested_by_name: requesterName.trim(),
+          cafe_code: selectedCafe?.code,
         }),
       });
 
@@ -185,18 +197,54 @@ export default function RequestPage() {
           <div className="flex items-center gap-4">
             <Image src="/wmu-logo.png" alt="WMU logo" width={140} height={40} className="h-auto w-[140px]" priority />
             <div>
-              <p className="text-xs font-semibold uppercase text-stone-500">Parkview Cafe</p>
+              <p className="text-xs font-semibold uppercase text-stone-500">{selectedCafe?.name ?? "Select a Cafe"}</p>
               <h1 className="text-lg font-semibold text-[#2f200f]">Request Items</h1>
             </div>
           </div>
           <p className="text-sm text-stone-500">{sessionEmail}</p>
+            <SignOutButton />
         </div>
       </header>
 
       <section className="mx-auto max-w-3xl px-4 py-8">
+
+        {/* Cafe + Name selectors */}
+        <div className="mb-4 grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-semibold text-[#2f200f] mb-1.5">
+              Cafe <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={selectedCafe?.code ?? ""}
+              onChange={(e) => {
+                const cafe = cafes.find((c) => c.code === e.target.value) ?? null;
+                setSelectedCafe(cafe);
+              }}
+              className="w-full rounded-lg border border-[#c9b48a] bg-[#faf6ee] px-3 py-2.5 text-sm text-[#2f200f] outline-none focus:border-[#c49a3c] focus:ring-2 focus:ring-[#c49a3c44]"
+            >
+              <option value="">Select your cafe...</option>
+              {cafes.map((c) => (
+                <option key={c.code} value={c.code}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-[#2f200f] mb-1.5">
+              Your Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={requesterName}
+              onChange={(e) => setRequesterName(e.target.value)}
+              placeholder="e.g. John Smith"
+              className="w-full rounded-lg border border-[#c9b48a] bg-[#faf6ee] px-3 py-2.5 text-sm text-[#2f200f] outline-none focus:border-[#c49a3c] focus:ring-2 focus:ring-[#c49a3c44] placeholder:text-[#b0956a]"
+            />
+          </div>
+        </div>
+
         <div className="overflow-hidden rounded-lg border border-[#d6c9b0] bg-[#faf6ee]">
           <div className="border-b border-[#d6c9b0] bg-[#f3ead8] px-4 py-3">
-            <h2 className="font-bold text-[#2f200f]">Parkview Cafe Request Form</h2>
+            <h2 className="font-bold text-[#2f200f]">{selectedCafe ? `${selectedCafe.name} Request Form` : "Request Form"}</h2>
             <p className="mt-1 text-sm text-[#7a6040]">Enter the quantity you need for each item. Leave blank to skip.</p>
           </div>
 
@@ -310,7 +358,7 @@ export default function RequestPage() {
             {/* Modal header */}
             <div className="border-b border-[#d6c9b0] bg-[#f3ead8] px-6 py-4 rounded-t-2xl">
               <h2 className="text-base font-bold text-[#2f200f]">Review Your Request</h2>
-              <p className="text-xs text-[#7a6040] mt-0.5">Parkview Cafe → Commissary</p>
+              <p className="text-xs text-[#7a6040] mt-0.5">{selectedCafe?.name ?? "Cafe"} → Commissary</p>
             </div>
 
             {/* Line items */}
@@ -371,24 +419,6 @@ export default function RequestPage() {
               </div>
             )}
 
-            {/* Name field */}
-            <div className="px-6 py-3 border-t border-[#d6c9b0]">
-              <label className="block text-xs font-semibold uppercase text-[#7a6040] mb-1">
-                Your Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={requesterName}
-                onChange={(e) => { setRequesterName(e.target.value); setNameError(""); }}
-                placeholder="e.g. John Smith"
-                className={`w-full rounded-lg border px-3 py-2 text-sm text-[#2f200f] outline-none focus:ring-2 ${
-                  nameError
-                    ? "border-red-400 focus:border-red-500 focus:ring-red-200"
-                    : "border-[#c9b48a] focus:border-[#c49a3c] focus:ring-[#c49a3c44]"
-                }`}
-              />
-              {nameError && <p className="mt-1 text-xs text-red-600">{nameError}</p>}
-            </div>
 
             {/* Actions */}
             <div className="flex items-center justify-end gap-3 px-6 py-4">
