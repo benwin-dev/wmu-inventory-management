@@ -10,6 +10,7 @@ type AuthStep = "request" | "verify" | "app";
 type MasterInventoryItem = {
   sku: string;
   item_name: string;
+  description: string | null;
   unit_type: string;
   case_size: string | null;
   on_hand_qty: string;
@@ -25,6 +26,7 @@ type AddItemForm = {
   case_price: string;
   unit_price: string;
   on_hand_qty: string;
+  description: string;
 };
 
 const EMPTY_FORM: AddItemForm = {
@@ -34,6 +36,7 @@ const EMPTY_FORM: AddItemForm = {
   case_price: "",
   unit_price: "",
   on_hand_qty: "0",
+  description: "",
 };
 
 function normalizeEmail(value: string) {
@@ -336,6 +339,7 @@ export default function Home() {
       case_price: item.case_price ? String(parseFloat(item.case_price)) : "",
       unit_price: item.unit_price ? String(parseFloat(item.unit_price)) : "",
       on_hand_qty: item.on_hand_qty,
+      description: item.description ?? "",
     });
     setEditError("");
     setEditUnitPriceManuallyEdited(true); // don't auto-override on open
@@ -363,6 +367,7 @@ export default function Home() {
           case_price: editForm.case_price ? parseFloat(editForm.case_price) : null,
           unit_price: editForm.unit_price ? parseFloat(editForm.unit_price) : null,
           on_hand_qty: editForm.on_hand_qty ? parseFloat(editForm.on_hand_qty) : 0,
+          description: editForm.description.trim() || null,
         }),
       });
 
@@ -415,6 +420,7 @@ export default function Home() {
           case_price: addForm.case_price ? parseFloat(addForm.case_price) : null,
           unit_price: addForm.unit_price ? parseFloat(addForm.unit_price) : null,
           on_hand_qty: addForm.on_hand_qty ? parseFloat(addForm.on_hand_qty) : 0,
+          description: addForm.description.trim() || null,
         }),
       });
 
@@ -640,14 +646,25 @@ export default function Home() {
                     <label className="mb-1 block text-sm font-medium text-stone-700">Unit Type</label>
                     <select
                       value={addForm.unit_type}
-                      onChange={(e) => setAddForm((p) => ({ ...p, unit_type: e.target.value }))}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAddForm((p) => ({
+                          ...p,
+                          unit_type: val,
+                          units_per_case: val === "case" && !p.units_per_case ? "1" : p.units_per_case,
+                        }));
+                      }}
                       className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#8a6331] focus:ring-2 focus:ring-[#d9b98a66]"
                     >
                       <option value="each">each</option>
+                      <option value="case">case</option>
                       <option value="tub">tub</option>
                       <option value="bag">bag</option>
                       <option value="box">box</option>
                     </select>
+                    {addForm.unit_type === "case" && (
+                      <p className="mt-1 text-xs text-stone-400">Tracking as whole cases. Units per case auto-set to 1.</p>
+                    )}
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-stone-700">Units Per Case</label>
@@ -716,6 +733,18 @@ export default function Home() {
                   />
                 </div>
 
+                {/* Description */}
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-stone-700">Description <span className="text-stone-400 font-normal">(optional)</span></label>
+                  <textarea
+                    rows={2}
+                    value={addForm.description}
+                    onChange={(e) => setAddForm((p) => ({ ...p, description: e.target.value }))}
+                    placeholder="e.g. Whole milk, 1 gal jugs, case of 6"
+                    className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#8a6331] focus:ring-2 focus:ring-[#d9b98a66] resize-none"
+                  />
+                </div>
+
                 {!!addError && <p className="text-sm font-medium text-red-700">{addError}</p>}
 
                 <div className="flex gap-3 pt-2">
@@ -767,14 +796,25 @@ export default function Home() {
                     <label className="mb-1 block text-sm font-medium text-stone-700">Unit Type</label>
                     <select
                       value={editForm.unit_type}
-                      onChange={(e) => setEditForm((p) => ({ ...p, unit_type: e.target.value }))}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditForm((p) => ({
+                          ...p,
+                          unit_type: val,
+                          units_per_case: val === "case" && !p.units_per_case ? "1" : p.units_per_case,
+                        }));
+                      }}
                       className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#8a6331] focus:ring-2 focus:ring-[#d9b98a66]"
                     >
                       <option value="each">each</option>
+                      <option value="case">case</option>
                       <option value="tub">tub</option>
                       <option value="bag">bag</option>
                       <option value="box">box</option>
                     </select>
+                    {editForm.unit_type === "case" && (
+                      <p className="mt-1 text-xs text-stone-400">Tracking as whole cases. Units per case auto-set to 1.</p>
+                    )}
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-stone-700">Units Per Case</label>
@@ -839,6 +879,18 @@ export default function Home() {
                     value={editForm.on_hand_qty}
                     onChange={(e) => setEditForm((p) => ({ ...p, on_hand_qty: e.target.value }))}
                     className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#8a6331] focus:ring-2 focus:ring-[#d9b98a66]"
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-stone-700">Description <span className="text-stone-400 font-normal">(optional)</span></label>
+                  <textarea
+                    rows={2}
+                    value={editForm.description}
+                    onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))}
+                    placeholder="e.g. Whole milk, 1 gal jugs, case of 6"
+                    className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#8a6331] focus:ring-2 focus:ring-[#d9b98a66] resize-none"
                   />
                 </div>
 

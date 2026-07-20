@@ -11,6 +11,7 @@ type InventoryRow = {
   on_hand_qty: string;
   case_price: string | null;
   unit_price: string | null;
+  description: string | null;
 };
 
 export async function GET(request: NextRequest) {
@@ -28,6 +29,7 @@ export async function GET(request: NextRequest) {
       SELECT
         i.sku,
         i.name AS item_name,
+        i.description,
         i.unit_type,
         i.case_size,
         i.units_per_case::text,

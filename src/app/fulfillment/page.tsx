@@ -8,6 +8,7 @@ import SignOutButton from "@/components/SignOutButton";
 type RequestLine = {
   sku: string;
   item_name: string;
+  description: string | null;
   unit_type: string;
   requested_qty: string;
   fulfilled_qty: string | null;
@@ -438,7 +439,10 @@ export default function FulfillmentPage() {
                             const hasFulfilledCol = req.lines.some((l) => l.fulfilled_qty != null);
                             return (
                               <tr key={i} className={isShort ? "bg-orange-50" : ""}>
-                                <td className="px-5 py-2.5 font-medium text-stone-900">{line.item_name}</td>
+                                <td className="px-5 py-2.5">
+                                  <p className="font-medium text-stone-900">{line.item_name}</p>
+                                  {line.description && <p className="mt-0.5 text-xs text-stone-400">{line.description}</p>}
+                                </td>
                                 <td className="px-5 py-2.5 text-stone-500">{line.unit_type}</td>
                                 <td className="px-5 py-2.5 text-right text-stone-500">{price != null ? `$${price.toFixed(2)}` : "—"}</td>
                                 <td className="px-5 py-2.5 text-right text-stone-400">{requestedQty}</td>
@@ -508,7 +512,10 @@ export default function FulfillmentPage() {
                             const subtotal = price != null ? price * fulfillQty : null;
                             return (
                               <tr key={line.sku} className={hasIssue ? "bg-red-50" : ""}>
-                                <td className="px-5 py-2.5 font-medium text-stone-900">{line.item_name}</td>
+                                <td className="px-5 py-2.5">
+                                  <p className="font-medium text-stone-900">{line.item_name}</p>
+                                  {line.description && <p className="mt-0.5 text-xs text-stone-400">{line.description}</p>}
+                                </td>
                                 <td className="px-5 py-2.5 text-stone-500">{line.unit_type}</td>
                                 <td className="px-5 py-2.5 text-right text-stone-400">{price != null ? `$${price.toFixed(2)}` : "—"}</td>
                                 <td className="px-5 py-2.5 text-right text-stone-400">{parseFloat(line.requested_qty)}</td>

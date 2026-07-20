@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
       case_price?: number | null;
       unit_price?: number | null;
       on_hand_qty?: number;
+      description?: string | null;
     };
 
     const name = body.name?.trim();
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
     const case_price = body.case_price ?? null;
     const unit_price = body.unit_price ?? null;
     const on_hand_qty = body.on_hand_qty ?? 0;
+    const description = body.description?.trim() || null;
 
     if (!name) {
       return NextResponse.json({ error: "Item name is required." }, { status: 400 });
@@ -58,9 +60,9 @@ export async function POST(request: NextRequest) {
     const result = await pool.query(
       `
       WITH inserted_item AS (
-        INSERT INTO items (sku, name, unit_type, units_per_case, active)
-        VALUES ($1, $2, $3, $4, TRUE)
-        RETURNING id, sku, name, unit_type, units_per_case
+        INSERT INTO items (sku, name, unit_type, units_per_case, description, active)
+        VALUES ($1, $2, $3, $4, $8, TRUE)
+        RETURNING id, sku, name, unit_type, units_per_case, description
       ),
       inserted_price AS (
         INSERT INTO item_prices (item_id, price_per_unit, case_price, effective_from)
@@ -88,7 +90,7 @@ export async function POST(request: NextRequest) {
       LEFT JOIN inserted_price p ON p.item_id = i.id
       LEFT JOIN inserted_balance b ON TRUE
       `,
-      [sku, name, unit_type, units_per_case, unit_price, case_price, on_hand_qty],
+      [sku, name, unit_type, units_per_case, unit_price, case_price, on_hand_qty, description],
     );
 
     const item = result.rows[0];

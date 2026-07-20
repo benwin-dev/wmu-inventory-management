@@ -8,6 +8,7 @@ import SignOutButton from "@/components/SignOutButton";
 type InventoryItem = {
   sku: string;
   item_name: string;
+  description: string | null;
   unit_type: string;
   units_per_case: string | null;
   case_price: string | null;
@@ -271,7 +272,10 @@ export default function RequestPage() {
                         : ""
                     }
                   >
-                    <td className="px-4 py-3 font-medium text-[#2f200f]">{item.item_name}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-[#2f200f]">{item.item_name}</p>
+                      {item.description && <p className="mt-0.5 text-xs text-stone-400">{item.description}</p>}
+                    </td>
                     <td className="px-4 py-3 text-[#5c3a18]">
                       {item.unit_price ? `$${Number(item.unit_price).toFixed(2)}` : "—"}
                     </td>

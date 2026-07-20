@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session-store";
 type RequestLine = {
   sku: string;
   item_name: string;
+  description: string | null;
   unit_type: string;
   requested_qty: string;
   fulfilled_qty: string | null;
@@ -68,6 +69,7 @@ export async function GET(request: NextRequest) {
          srl.stock_request_id,
          i.sku,
          i.name AS item_name,
+         i.description,
          i.unit_type,
          srl.requested_qty::text,
          srl.fulfilled_qty::text,

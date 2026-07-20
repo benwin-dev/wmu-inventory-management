@@ -79,6 +79,7 @@ export async function PATCH(
       case_price?: number | null;
       unit_price?: number | null;
       on_hand_qty?: number;
+      description?: string | null;
     };
 
     const pool = getDbPool();
@@ -86,9 +87,9 @@ export async function PATCH(
     // Update items table
     await pool.query(
       `UPDATE items
-       SET name = $1, unit_type = $2, units_per_case = $3, updated_at = NOW()
-       WHERE sku = $4`,
-      [body.name, body.unit_type, body.units_per_case ?? null, sku],
+       SET name = $1, unit_type = $2, units_per_case = $3, description = $4, updated_at = NOW()
+       WHERE sku = $5`,
+      [body.name, body.unit_type, body.units_per_case ?? null, body.description?.trim() ?? null, sku],
     );
 
     // Update current price row (effective_to IS NULL)
@@ -116,6 +117,7 @@ export async function PATCH(
       `SELECT
          i.sku,
          i.name AS item_name,
+         i.description,
          i.unit_type,
          i.units_per_case::text,
          NULL AS case_size,
