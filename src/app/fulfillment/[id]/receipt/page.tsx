@@ -20,6 +20,9 @@ type ReceiptRequest = {
   submitted_by: string;
   fulfilled_by: string | null;
   recorded_by: string | null;
+  requested_by_name: string | null;
+  fulfilled_by_name: string | null;
+  recorded_by_name: string | null;
   cafe_name: string;
   status: string;
   notes: string | null;
@@ -231,23 +234,23 @@ export default function ReceiptPage() {
         </div>
 
         {/* Signatures / people */}
-        <div className="mb-6 grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-lg border border-stone-200 bg-stone-50 px-5 py-3 space-y-1.5">
-            <div className="flex justify-between">
-              <span className="font-semibold text-stone-500">Requested By</span>
-              <span className="text-stone-800">{req.submitted_by}</span>
+        <div className="mb-6 rounded-lg border border-stone-200 bg-stone-50 px-5 py-4 text-sm space-y-2.5">
+          {[
+            { label: "Requested By", name: req.requested_by_name, email: req.submitted_by },
+            { label: "Fulfilled By", name: req.fulfilled_by_name, email: req.fulfilled_by },
+            { label: "Finalized By", name: req.recorded_by_name, email: req.recorded_by },
+          ].map(({ label, name, email }) => (
+            <div key={label} className="flex items-baseline justify-between gap-4">
+              <span className="font-semibold text-stone-500 shrink-0">{label}</span>
+              <span className="text-right text-stone-800">
+                {name ? (
+                  <>{name} <span className="text-stone-400 text-xs">({email})</span></>
+                ) : email ? (
+                  email
+                ) : "—"}
+              </span>
             </div>
-            <div className="flex justify-between">
-              <span className="font-semibold text-stone-500">Fulfilled By</span>
-              <span className="text-stone-800">{req.fulfilled_by ?? "—"}</span>
-            </div>
-          </div>
-          <div className="rounded-lg border border-stone-200 bg-stone-50 px-5 py-3 space-y-1.5">
-            <div className="flex justify-between">
-              <span className="font-semibold text-stone-500">Finalized By</span>
-              <span className="text-stone-800">{req.recorded_by ?? "—"}</span>
-            </div>
-          </div>
+          ))}
         </div>
 
         {/* Notes */}

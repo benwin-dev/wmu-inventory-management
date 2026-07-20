@@ -59,13 +59,19 @@ export async function PATCH(
     const body = (await request.json()) as {
       lines: { sku: string; qty: number }[];
       fulfillment_notes?: string | null;
+      fulfilled_by_name?: string;
     };
 
     const lines = body.lines ?? [];
     const fulfillmentNotes = body.fulfillment_notes?.trim() || null;
+    const fulfilledByName = body.fulfilled_by_name?.trim() || null;
 
     if (lines.length === 0) {
       return NextResponse.json({ error: "No lines to fulfill." }, { status: 400 });
+    }
+
+    if (!fulfilledByName) {
+      return NextResponse.json({ error: "Please enter your name before confirming fulfillment." }, { status: 400 });
     }
 
     const pool = getDbPool();
@@ -151,10 +157,10 @@ export async function PATCH(
 
       const result = await client.query(
         `UPDATE stock_requests
-         SET status = $1, fulfillment_notes = $2, fulfilled_by = $3, fulfilled_at = NOW(), updated_at = NOW()
-         WHERE id = $4
+         SET status = $1, fulfillment_notes = $2, fulfilled_by = $3, fulfilled_by_name = $4, fulfilled_at = NOW(), updated_at = NOW()
+         WHERE id = $5
          RETURNING id`,
-        [status, fulfillmentNotes, session.email, requestId],
+        [status, fulfillmentNotes, session.email, fulfilledByName, requestId],
       );
 
       if (result.rowCount === 0) {

@@ -14,24 +14,29 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       items: { sku: string; qty: number }[];
       notes?: string;
+      requested_by_name?: string;
     };
 
     const lines = (body.items ?? []).filter((l) => l.qty > 0);
     const notes = body.notes?.trim() || null;
+    const requestedByName = body.requested_by_name?.trim() || null;
 
     if (lines.length === 0) {
       return NextResponse.json({ error: "Add at least one item to your request." }, { status: 400 });
     }
 
+    if (!requestedByName) {
+      return NextResponse.json({ error: "Please enter your name before submitting." }, { status: 400 });
+    }
+
     const pool = getDbPool();
 
-    // Create the stock request for Parkview
     const reqResult = await pool.query<{ id: number }>(
-      `INSERT INTO stock_requests (cafe_id, request_date, status, submitted_by, submitted_at, notes)
-       SELECT id, CURRENT_DATE, 'submitted', $1, NOW(), $2
+      `INSERT INTO stock_requests (cafe_id, request_date, status, submitted_by, submitted_at, notes, requested_by_name)
+       SELECT id, CURRENT_DATE, 'submitted', $1, NOW(), $2, $3
        FROM cafes WHERE code = 'PARKVIEW'
        RETURNING id`,
-      [session.email, notes],
+      [session.email, notes, requestedByName],
     );
 
     const requestId = reqResult.rows[0].id;

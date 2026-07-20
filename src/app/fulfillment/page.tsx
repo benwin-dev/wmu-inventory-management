@@ -17,8 +17,11 @@ type StockRequest = {
   id: number;
   submitted_at: string;
   submitted_by: string;
+  requested_by_name: string | null;
   fulfilled_by: string | null;
+  fulfilled_by_name: string | null;
   recorded_by: string | null;
+  recorded_by_name: string | null;
   cafe_name: string;
   status: string;
   item_count: string;
@@ -79,13 +82,25 @@ export default function FulfillmentPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const [recordingId, setRecordingId] = useState<number | null>(null);
+  const [recordModal, setRecordModal] = useState<number | null>(null);
+  const [recordName, setRecordName] = useState("");
+  const [recordNameError, setRecordNameError] = useState("");
 
-  const handleRecord = async (id: number) => {
+  const handleRecord = async () => {
+    if (!recordName.trim()) { setRecordNameError("Please enter your name."); return; }
+    const id = recordModal!;
+    setRecordNameError("");
     setRecordingId(id);
     try {
-      const res = await fetch(`/api/fulfillment/${id}/record`, { method: "POST" });
+      const res = await fetch(`/api/fulfillment/${id}/record`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recorded_by_name: recordName.trim() }),
+      });
       if (res.ok) {
         setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: "recorded" } : r));
+        setRecordModal(null);
+        setRecordName("");
       } else {
         setError("Unable to mark as recorded right now.");
       }
@@ -100,6 +115,8 @@ export default function FulfillmentPage() {
   const [fulfillModeId, setFulfillModeId] = useState<number | null>(null);
   const [fulfillQtys, setFulfillQtys] = useState<Record<string, string>>({});
   const [fulfillNotes, setFulfillNotes] = useState("");
+  const [fulfillDriverName, setFulfillDriverName] = useState("");
+  const [fulfillDriverNameError, setFulfillDriverNameError] = useState("");
   const [fulfillIssues, setFulfillIssues] = useState<FulfillIssue[]>([]);
   const [fulfilling, setFulfilling] = useState(false);
 
@@ -133,10 +150,14 @@ export default function FulfillmentPage() {
     setFulfillModeId(null);
     setFulfillQtys({});
     setFulfillNotes("");
+    setFulfillDriverName("");
+    setFulfillDriverNameError("");
     setFulfillIssues([]);
   };
 
   const handleConfirmFulfill = async (req: StockRequest) => {
+    if (!fulfillDriverName.trim()) { setFulfillDriverNameError("Please enter your name."); return; }
+    setFulfillDriverNameError("");
     setFulfilling(true);
     setFulfillIssues([]);
     try {
@@ -148,7 +169,7 @@ export default function FulfillmentPage() {
       const res = await fetch(`/api/fulfillment/${req.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lines, fulfillment_notes: fulfillNotes.trim() || null }),
+        body: JSON.stringify({ lines, fulfillment_notes: fulfillNotes.trim() || null, fulfilled_by_name: fulfillDriverName.trim() }),
       });
 
       const data = (await res.json()) as {
@@ -274,7 +295,7 @@ export default function FulfillmentPage() {
                       <StatusBadge status={req.status} />
                       <div>
                         <p className="text-sm font-semibold text-stone-900">{req.cafe_name}</p>
-                        <p className="text-xs text-stone-500">{formatDate(req.submitted_at)} · {req.submitted_by}</p>
+                        <p className="text-xs text-stone-500">{formatDate(req.submitted_at)} · {req.requested_by_name ?? req.submitted_by}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -312,11 +333,10 @@ export default function FulfillmentPage() {
                             Receipt
                           </a>
                           <button
-                            onClick={() => handleRecord(req.id)}
-                            disabled={recordingId === req.id}
-                            className="rounded-lg bg-stone-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-stone-900 disabled:opacity-50"
+                            onClick={() => { setRecordModal(req.id); setRecordName(""); setRecordNameError(""); }}
+                            className="rounded-lg bg-stone-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-stone-900"
                           >
-                            {recordingId === req.id ? "Recording..." : "Mark as Recorded"}
+                            Mark as Recorded
                           </button>
                         </>
                       )}
@@ -528,6 +548,23 @@ export default function FulfillmentPage() {
                       <div className="px-5 py-4 border-t border-stone-100 space-y-3">
                         <div>
                           <label className="block text-xs font-semibold uppercase text-stone-500 mb-1.5">
+                            Driver Name <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={fulfillDriverName}
+                            onChange={(e) => { setFulfillDriverName(e.target.value); setFulfillDriverNameError(""); }}
+                            placeholder="e.g. Jane Doe"
+                            className={`w-full rounded-lg border px-3 py-2 text-sm text-stone-900 outline-none focus:ring-2 ${
+                              fulfillDriverNameError
+                                ? "border-red-400 focus:border-red-500 focus:ring-red-200"
+                                : "border-stone-300 focus:border-green-500 focus:ring-green-100"
+                            }`}
+                          />
+                          {fulfillDriverNameError && <p className="mt-1 text-xs text-red-600">{fulfillDriverNameError}</p>}
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase text-stone-500 mb-1.5">
                             Driver Note <span className="normal-case font-normal text-stone-400">(optional — e.g. partially fulfilled, reason for reduction)</span>
                           </label>
                           <textarea
@@ -563,6 +600,52 @@ export default function FulfillmentPage() {
           </div>
         )}
       </section>
+
+      {/* Mark as Recorded modal */}
+      {recordModal !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-stone-200 bg-white shadow-xl">
+            <div className="border-b border-stone-200 bg-stone-50 px-6 py-4 rounded-t-2xl">
+              <h2 className="text-base font-bold text-stone-900">Mark as Recorded</h2>
+              <p className="text-xs text-stone-500 mt-0.5">This will finalize the request and close it out.</p>
+            </div>
+            <div className="px-6 py-5 space-y-2">
+              <label className="block text-sm font-semibold text-stone-700">
+                Your Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={recordName}
+                onChange={(e) => { setRecordName(e.target.value); setRecordNameError(""); }}
+                placeholder="e.g. Manager Name"
+                autoFocus
+                className={`w-full rounded-lg border px-3 py-2 text-sm text-stone-900 outline-none focus:ring-2 ${
+                  recordNameError
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-200"
+                    : "border-stone-300 focus:border-stone-500 focus:ring-stone-200"
+                }`}
+              />
+              {recordNameError && <p className="text-xs text-red-600">{recordNameError}</p>}
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-stone-100">
+              <button
+                onClick={() => { setRecordModal(null); setRecordName(""); setRecordNameError(""); }}
+                disabled={recordingId !== null}
+                className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-600 hover:bg-stone-100 transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRecord}
+                disabled={recordingId !== null}
+                className="rounded-lg bg-stone-700 px-5 py-2 text-sm font-semibold text-white hover:bg-stone-900 transition disabled:opacity-50"
+              >
+                {recordingId !== null ? "Recording..." : "Confirm & Record"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

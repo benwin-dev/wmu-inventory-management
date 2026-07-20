@@ -34,6 +34,8 @@ export default function RequestPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
+  const [requesterName, setRequesterName] = useState("");
+  const [nameError, setNameError] = useState("");
   const [loading, setLoading] = useState(true);
   const [validating, setValidating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -113,6 +115,11 @@ export default function RequestPage() {
   };
 
   const handleConfirmSubmit = async () => {
+    if (!requesterName.trim()) {
+      setNameError("Please enter your name.");
+      return;
+    }
+    setNameError("");
     setSubmitting(true);
     setError("");
     try {
@@ -122,6 +129,7 @@ export default function RequestPage() {
         body: JSON.stringify({
           items: selectedLines.map((l) => ({ sku: l.sku, qty: l.qty })),
           notes: notes.trim() || null,
+          requested_by_name: requesterName.trim(),
         }),
       });
 
@@ -134,6 +142,7 @@ export default function RequestPage() {
       }
 
       setShowConfirm(false);
+      setRequesterName("");
       setSubmitted(true);
     } catch {
       setShowConfirm(false);
@@ -361,6 +370,25 @@ export default function RequestPage() {
                 />
               </div>
             )}
+
+            {/* Name field */}
+            <div className="px-6 py-3 border-t border-[#d6c9b0]">
+              <label className="block text-xs font-semibold uppercase text-[#7a6040] mb-1">
+                Your Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={requesterName}
+                onChange={(e) => { setRequesterName(e.target.value); setNameError(""); }}
+                placeholder="e.g. John Smith"
+                className={`w-full rounded-lg border px-3 py-2 text-sm text-[#2f200f] outline-none focus:ring-2 ${
+                  nameError
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-200"
+                    : "border-[#c9b48a] focus:border-[#c49a3c] focus:ring-[#c49a3c44]"
+                }`}
+              />
+              {nameError && <p className="mt-1 text-xs text-red-600">{nameError}</p>}
+            </div>
 
             {/* Actions */}
             <div className="flex items-center justify-end gap-3 px-6 py-4">

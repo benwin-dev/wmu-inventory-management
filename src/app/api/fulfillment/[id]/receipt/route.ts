@@ -25,6 +25,9 @@ export async function GET(
       submitted_by: string;
       fulfilled_by: string | null;
       recorded_by: string | null;
+      requested_by_name: string | null;
+      fulfilled_by_name: string | null;
+      recorded_by_name: string | null;
       cafe_name: string;
       status: string;
       notes: string | null;
@@ -38,6 +41,9 @@ export async function GET(
          sr.submitted_by,
          sr.fulfilled_by,
          sr.recorded_by,
+         sr.requested_by_name,
+         sr.fulfilled_by_name,
+         sr.recorded_by_name,
          COALESCE(c.name, 'Unknown') AS cafe_name,
          sr.status,
          sr.notes,
