@@ -16,6 +16,10 @@ export async function createSession(email: string, role: UserRole = "cafe", cafe
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS);
 
   const pool = getDbPool();
+
+  // Fire-and-forget cleanup of expired sessions
+  pool.query(`DELETE FROM sessions WHERE expires_at < NOW()`).catch(() => {});
+
   await pool.query(
     `INSERT INTO sessions (token, email, role, cafe_id, expires_at)
      VALUES ($1, $2, $3, $4, $5)`,
