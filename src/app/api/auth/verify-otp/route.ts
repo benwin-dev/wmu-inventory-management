@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid verification request." }, { status: 400 });
     }
 
-    const result = verifyOtp(email, otp);
+    const result = await verifyOtp(email, otp);
 
     if (!result.ok) {
       return NextResponse.json({ error: "Invalid or expired verification code." }, { status: 401 });

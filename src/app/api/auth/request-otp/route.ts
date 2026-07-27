@@ -32,15 +32,6 @@ function isAllowedEmail(email: string) {
   return parts[1] === WMU_DOMAIN;
 }
 
-function getClientIp(request: NextRequest) {
-  const forwarded = request.headers.get("x-forwarded-for");
-
-  if (forwarded) {
-    return forwarded.split(",")[0]?.trim() || "unknown";
-  }
-
-  return request.headers.get("x-real-ip") || "unknown";
-}
 
 function shouldUseDemoRecipient() {
   return process.env.RESEND_FORCE_DEMO_RECIPIENT?.toLowerCase() === "true";
@@ -146,8 +137,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ip = getClientIp(request);
-    const otpResult = requestOtpCreation(normalizedEmail, ip);
+    const otpResult = await requestOtpCreation(normalizedEmail);
 
     if (!otpResult.ok) {
       return NextResponse.json(

@@ -1,63 +1,10 @@
 import crypto from "crypto";
+import { getDbPool } from "@/lib/db";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const EMAIL_WINDOW_MS = 60 * 1000;
-const IP_WINDOW_MS = 60 * 1000;
 const MAX_EMAIL_REQUESTS_PER_WINDOW = 3;
-const MAX_IP_REQUESTS_PER_WINDOW = 10;
 const MAX_OTP_ATTEMPTS = 5;
-
-type OtpRecord = {
-  email: string;
-  otpHash: string;
-  salt: string;
-  createdAt: number;
-  expiresAt: number;
-  attemptCount: number;
-  usedAt?: number;
-};
-
-type RateLimitRecord = {
-  count: number;
-  resetAt: number;
-};
-
-const otpByEmail = new Map<string, OtpRecord>();
-const emailRateLimit = new Map<string, RateLimitRecord>();
-const ipRateLimit = new Map<string, RateLimitRecord>();
-
-function now() {
-  return Date.now();
-}
-
-function nextWindow(ms: number) {
-  return now() + ms;
-}
-
-function checkRateLimit(
-  store: Map<string, RateLimitRecord>,
-  key: string,
-  maxRequests: number,
-  windowMs: number,
-) {
-  const current = store.get(key);
-
-  if (!current || current.resetAt <= now()) {
-    store.set(key, { count: 1, resetAt: nextWindow(windowMs) });
-    return { allowed: true, retryAfterSec: 0 };
-  }
-
-  if (current.count >= maxRequests) {
-    return {
-      allowed: false,
-      retryAfterSec: Math.max(1, Math.ceil((current.resetAt - now()) / 1000)),
-    };
-  }
-
-  current.count += 1;
-  store.set(key, current);
-  return { allowed: true, retryAfterSec: 0 };
-}
 
 function hashOtp(otp: string, salt: string) {
   return crypto.createHash("sha256").update(`${otp}:${salt}`).digest("hex");
@@ -66,11 +13,7 @@ function hashOtp(otp: string, salt: string) {
 function secureCompare(a: string, b: string) {
   const first = Buffer.from(a, "hex");
   const second = Buffer.from(b, "hex");
-
-  if (first.length !== second.length) {
-    return false;
-  }
-
+  if (first.length !== second.length) return false;
   return crypto.timingSafeEqual(first, second);
 }
 
@@ -78,84 +21,77 @@ function generateOtp() {
   return crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
 }
 
-function cleanupExpiredOtps() {
-  const current = now();
+export async function requestOtpCreation(email: string) {
+  const pool = getDbPool();
 
-  for (const [email, record] of otpByEmail.entries()) {
-    if (record.expiresAt <= current) {
-      otpByEmail.delete(email);
-    }
-  }
-}
+  // Cleanup expired OTPs (fire-and-forget)
+  pool.query(`DELETE FROM otps WHERE expires_at < NOW()`).catch(() => {});
 
-export function requestOtpCreation(email: string, ip: string) {
-  cleanupExpiredOtps();
-
-  const emailLimit = checkRateLimit(
-    emailRateLimit,
-    email,
-    MAX_EMAIL_REQUESTS_PER_WINDOW,
-    EMAIL_WINDOW_MS,
+  // Email rate limit: max 3 requests per minute
+  const recentResult = await pool.query<{ count: string }>(
+    `SELECT COUNT(*) AS count FROM otps WHERE email = $1 AND created_at > NOW() - INTERVAL '1 minute'`,
+    [email],
   );
-
-  if (!emailLimit.allowed) {
-    return { ok: false as const, retryAfterSec: emailLimit.retryAfterSec, reason: "email_rate" };
-  }
-
-  const ipLimit = checkRateLimit(ipRateLimit, ip, MAX_IP_REQUESTS_PER_WINDOW, IP_WINDOW_MS);
-
-  if (!ipLimit.allowed) {
-    return { ok: false as const, retryAfterSec: ipLimit.retryAfterSec, reason: "ip_rate" };
+  const recentCount = parseInt(recentResult.rows[0]?.count ?? "0", 10);
+  if (recentCount >= MAX_EMAIL_REQUESTS_PER_WINDOW) {
+    return { ok: false as const, retryAfterSec: 60, reason: "email_rate" };
   }
 
   const otp = generateOtp();
   const salt = crypto.randomBytes(16).toString("hex");
   const otpHash = hashOtp(otp, salt);
+  const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-  otpByEmail.set(email, {
-    email,
-    otpHash,
-    salt,
-    createdAt: now(),
-    expiresAt: nextWindow(OTP_TTL_MS),
-    attemptCount: 0,
-  });
+  await pool.query(
+    `INSERT INTO otps (email, otp_hash, salt, expires_at) VALUES ($1, $2, $3, $4)`,
+    [email, otpHash, salt, expiresAt],
+  );
 
   return { ok: true as const, otp, expiresInSec: Math.floor(OTP_TTL_MS / 1000) };
 }
 
-export function verifyOtp(email: string, otp: string) {
-  cleanupExpiredOtps();
+export async function verifyOtp(email: string, otp: string) {
+  const pool = getDbPool();
 
-  const record = otpByEmail.get(email);
+  // Find the latest unused, unexpired OTP for this email
+  const result = await pool.query<{
+    id: number;
+    otp_hash: string;
+    salt: string;
+    attempt_count: number;
+    used_at: string | null;
+  }>(
+    `SELECT id, otp_hash, salt, attempt_count, used_at
+     FROM otps
+     WHERE email = $1 AND expires_at > NOW() AND used_at IS NULL
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [email],
+  );
 
-  if (!record || record.usedAt) {
+  if (result.rows.length === 0) {
     return { ok: false as const, reason: "not_found" };
   }
 
-  if (record.expiresAt <= now()) {
-    otpByEmail.delete(email);
-    return { ok: false as const, reason: "expired" };
-  }
+  const record = result.rows[0];
 
-  if (record.attemptCount >= MAX_OTP_ATTEMPTS) {
-    otpByEmail.delete(email);
+  if (record.attempt_count >= MAX_OTP_ATTEMPTS) {
+    await pool.query(`DELETE FROM otps WHERE id = $1`, [record.id]);
     return { ok: false as const, reason: "too_many_attempts" };
   }
 
-  record.attemptCount += 1;
+  // Increment attempt count
+  await pool.query(`UPDATE otps SET attempt_count = attempt_count + 1 WHERE id = $1`, [record.id]);
 
-  // const devBypass = process.env.NODE_ENV !== "production" && otp === "000000";
   const devBypass = otp === "000000";
   const incomingHash = hashOtp(otp, record.salt);
 
-  if (!devBypass && !secureCompare(incomingHash, record.otpHash)) {
-    otpByEmail.set(email, record);
+  if (!devBypass && !secureCompare(incomingHash, record.otp_hash)) {
     return { ok: false as const, reason: "invalid" };
   }
 
-  record.usedAt = now();
-  otpByEmail.delete(email);
+  // Mark as used
+  await pool.query(`UPDATE otps SET used_at = NOW() WHERE id = $1`, [record.id]);
 
-  return { ok: true as const, email: record.email };
+  return { ok: true as const, email };
 }
