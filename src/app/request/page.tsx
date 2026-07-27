@@ -36,6 +36,7 @@ type Cafe = { id: number; code: string; name: string };
 export default function RequestPage() {
   const router = useRouter();
   const [sessionEmail, setSessionEmail] = useState("");
+  const [sessionCafeId, setSessionCafeId] = useState<number | null>(null);
   const [cafes, setCafes] = useState<Cafe[]>([]);
   const [selectedCafe, setSelectedCafe] = useState<Cafe | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -54,8 +55,10 @@ export default function RequestPage() {
     async function init() {
       const sessionRes = await fetch("/api/auth/session");
       if (!sessionRes.ok) { router.push("/"); return; }
-      const sessionData = (await sessionRes.json()) as { email?: string; role?: string };
+      const sessionData = (await sessionRes.json()) as { email?: string; role?: string; cafe_id?: number | null };
       setSessionEmail(sessionData.email ?? "");
+      const userCafeId = sessionData.cafe_id ? Number(sessionData.cafe_id) : null;
+      setSessionCafeId(userCafeId);
 
       const [cafesRes, invRes] = await Promise.all([
         fetch("/api/cafes", { cache: "no-store" }),
@@ -63,11 +66,19 @@ export default function RequestPage() {
       ]);
       const cafesData = (await cafesRes.json()) as { cafes?: Cafe[] };
       const invData = (await invRes.json()) as { items?: InventoryItem[] };
-      setCafes(cafesData.cafes ?? []);
+      const allCafes = cafesData.cafes ?? [];
+      setCafes(allCafes);
       setItems((invData.items ?? []).map((item) => ({
         ...item,
         cafe_ids: (item.cafe_ids ?? []).map(Number),
       })));
+
+      // Auto-select cafe for cafe-specific users
+      if (userCafeId) {
+        const matched = allCafes.find((c) => Number(c.id) === userCafeId) ?? null;
+        setSelectedCafe(matched);
+      }
+
       setLoading(false);
     }
     init();
@@ -219,24 +230,33 @@ export default function RequestPage() {
 
         {/* Cafe + Name selectors */}
         <div className="mb-4 grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-semibold text-[#2f200f] mb-1.5">
-              Cafe <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={selectedCafe?.code ?? ""}
-              onChange={(e) => {
-                const cafe = cafes.find((c) => c.code === e.target.value) ?? null;
-                setSelectedCafe(cafe);
-              }}
-              className="w-full rounded-lg border border-[#c9b48a] bg-[#faf6ee] px-3 py-2.5 text-sm text-[#2f200f] outline-none focus:border-[#c49a3c] focus:ring-2 focus:ring-[#c49a3c44]"
-            >
-              <option value="">Select your cafe...</option>
-              {cafes.map((c) => (
-                <option key={c.code} value={c.code}>{c.name}</option>
-              ))}
-            </select>
-          </div>
+          {sessionCafeId ? (
+            <div>
+              <label className="block text-sm font-semibold text-[#2f200f] mb-1.5">Cafe</label>
+              <p className="rounded-lg border border-[#c9b48a] bg-[#faf6ee] px-3 py-2.5 text-sm text-[#2f200f]">
+                {selectedCafe?.name ?? "—"}
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-semibold text-[#2f200f] mb-1.5">
+                Cafe <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={selectedCafe?.code ?? ""}
+                onChange={(e) => {
+                  const cafe = cafes.find((c) => c.code === e.target.value) ?? null;
+                  setSelectedCafe(cafe);
+                }}
+                className="w-full rounded-lg border border-[#c9b48a] bg-[#faf6ee] px-3 py-2.5 text-sm text-[#2f200f] outline-none focus:border-[#c49a3c] focus:ring-2 focus:ring-[#c49a3c44]"
+              >
+                <option value="">Select your cafe...</option>
+                {cafes.map((c) => (
+                  <option key={c.code} value={c.code}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-semibold text-[#2f200f] mb-1.5">
               Your Name <span className="text-red-500">*</span>

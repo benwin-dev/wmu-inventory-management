@@ -7,6 +7,7 @@ export type UserRole = "admin" | "commissary" | "cafe" | "driver";
 type SessionRecord = {
   email: string;
   role: UserRole;
+  cafe_id: number | null;
   expiresAt: number;
 };
 
@@ -26,7 +27,7 @@ function cleanupExpiredSessions() {
   }
 }
 
-export function createSession(email: string, role: UserRole = "cafe") {
+export function createSession(email: string, role: UserRole = "cafe", cafe_id: number | null = null) {
   cleanupExpiredSessions();
 
   const token = crypto.randomBytes(32).toString("hex");
@@ -34,6 +35,7 @@ export function createSession(email: string, role: UserRole = "cafe") {
   sessions.set(token, {
     email,
     role,
+    cafe_id,
     expiresAt: now() + SESSION_MAX_AGE_MS,
   });
 

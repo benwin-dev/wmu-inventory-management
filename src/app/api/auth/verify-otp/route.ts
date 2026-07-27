@@ -41,8 +41,8 @@ export async function POST(request: NextRequest) {
 
     // Look up role from DB
     const pool = getDbPool();
-    const roleResult = await pool.query<{ role: string }>(
-      `SELECT role FROM user_roles WHERE email = $1`,
+    const roleResult = await pool.query<{ role: string; cafe_id: number | null }>(
+      `SELECT role, cafe_id FROM user_roles WHERE email = $1`,
       [result.email],
     );
 
@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     const role = roleResult.rows[0].role as UserRole;
+    const cafe_id = roleResult.rows[0].cafe_id ?? null;
     const redirectMap: Record<UserRole, string> = {
       admin: "/admin",
       commissary: "/",
@@ -58,8 +59,8 @@ export async function POST(request: NextRequest) {
       driver: "/fulfillment",
     };
 
-    const session = createSession(result.email, role);
-    const response = NextResponse.json({ email: result.email, role, redirect: redirectMap[role] }, { status: 200 });
+    const session = createSession(result.email, role, cafe_id);
+    const response = NextResponse.json({ email: result.email, role, cafe_id, redirect: redirectMap[role] }, { status: 200 });
 
     response.cookies.set({
       name: "wmu_inventory_session",

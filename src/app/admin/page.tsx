@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import SignOutButton from "@/components/SignOutButton";
 
 type UserRole = "admin" | "commissary" | "cafe" | "driver";
-type User = { id: number; email: string; role: UserRole; created_at: string };
+type CafeOption = { id: number; code: string; name: string };
+type User = { id: number; email: string; role: UserRole; cafe_id: number | null; cafe_name: string | null; created_at: string };
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Admin",
@@ -26,16 +27,25 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function roleLabel(user: User): string {
+  if (user.role === "cafe") {
+    return user.cafe_name ? `Cafe – ${user.cafe_name}` : "Cafe – All";
+  }
+  return ROLE_LABELS[user.role];
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [sessionEmail, setSessionEmail] = useState("");
   const [users, setUsers] = useState<User[]>([]);
+  const [cafeOptions, setCafeOptions] = useState<CafeOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   // Add form
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("cafe");
+  const [newCafeId, setNewCafeId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
 
@@ -51,10 +61,20 @@ export default function AdminPage() {
       if (sessionData.role !== "admin") { router.push("/"); return; }
       setSessionEmail(sessionData.email ?? "");
 
-      const res = await fetch("/api/admin/users", { cache: "no-store" });
-      if (!res.ok) { setError("Unable to load users."); setLoading(false); return; }
-      const data = (await res.json()) as { users: User[] };
+      const [usersRes, cafesRes] = await Promise.all([
+        fetch("/api/admin/users", { cache: "no-store" }),
+        fetch("/api/cafes", { cache: "no-store" }),
+      ]);
+
+      if (!usersRes.ok) { setError("Unable to load users."); setLoading(false); return; }
+      const data = (await usersRes.json()) as { users: User[] };
       setUsers(data.users);
+
+      if (cafesRes.ok) {
+        const cafesData = (await cafesRes.json()) as { cafes?: CafeOption[] };
+        setCafeOptions(cafesData.cafes ?? []);
+      }
+
       setLoading(false);
     }
     init();
@@ -69,7 +89,7 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: newEmail.trim(), role: newRole }),
+        body: JSON.stringify({ email: newEmail.trim(), role: newRole, cafe_id: newRole === "cafe" ? newCafeId : null }),
       });
       const data = (await res.json()) as { user?: User; error?: string };
       if (!res.ok) { setAddError(data.error ?? "Unable to add user."); return; }
@@ -84,6 +104,7 @@ export default function AdminPage() {
       });
       setNewEmail("");
       setNewRole("cafe");
+      setNewCafeId(null);
     } catch {
       setAddError("Unable to add user right now.");
     } finally {
@@ -130,7 +151,6 @@ export default function AdminPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* <a href="/admin/audit" className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-stone-700 hover:border-stone-400 transition">Audit Log</a> */}
             <a href="/" className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-stone-700 hover:border-stone-400 transition">Dashboard</a>
             <p className="text-sm text-stone-500">{sessionEmail}</p>
             <SignOutButton />
@@ -147,8 +167,8 @@ export default function AdminPage() {
             <h2 className="font-semibold text-[#2f200f] text-sm">Grant Access</h2>
             <p className="text-xs text-[#7a6040] mt-0.5">Add a WMU email and assign their role. If the email already exists, their role will be updated.</p>
           </div>
-          <form onSubmit={handleAdd} className="px-5 py-4 flex items-end gap-3">
-            <div className="flex-1">
+          <form onSubmit={handleAdd} className="px-5 py-4 flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-48">
               <label className="block text-xs font-semibold text-stone-500 mb-1.5">WMU Email</label>
               <input
                 type="email"
@@ -162,7 +182,7 @@ export default function AdminPage() {
               <label className="block text-xs font-semibold text-stone-500 mb-1.5">Role</label>
               <select
                 value={newRole}
-                onChange={(e) => setNewRole(e.target.value as UserRole)}
+                onChange={(e) => { setNewRole(e.target.value as UserRole); setNewCafeId(null); }}
                 className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#c49a3c] focus:ring-2 focus:ring-[#c49a3c44]"
               >
                 <option value="admin">Admin</option>
@@ -171,6 +191,21 @@ export default function AdminPage() {
                 <option value="driver">Driver</option>
               </select>
             </div>
+            {newRole === "cafe" && (
+              <div className="w-44">
+                <label className="block text-xs font-semibold text-stone-500 mb-1.5">Cafe Access</label>
+                <select
+                  value={newCafeId ?? ""}
+                  onChange={(e) => setNewCafeId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#c49a3c] focus:ring-2 focus:ring-[#c49a3c44]"
+                >
+                  <option value="">All Cafes</option>
+                  {cafeOptions.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <button
               type="submit"
               disabled={adding}
@@ -203,7 +238,7 @@ export default function AdminPage() {
                   <td className="px-5 py-3 font-medium text-stone-900">{user.email}</td>
                   <td className="px-5 py-3">
                     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${ROLE_COLORS[user.role]}`}>
-                      {ROLE_LABELS[user.role]}
+                      {roleLabel(user)}
                     </span>
                   </td>
                   <td className="px-5 py-3 text-stone-500">{formatDate(user.created_at)}</td>
