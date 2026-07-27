@@ -80,6 +80,7 @@ export async function PATCH(
       unit_price?: number | null;
       on_hand_qty?: number;
       description?: string | null;
+      cafe_ids?: number[];
     };
 
     const pool = getDbPool();
@@ -112,6 +113,33 @@ export async function PATCH(
       [body.on_hand_qty ?? 0, sku],
     );
 
+    // Replace cafe visibility rows BEFORE the final SELECT so response has correct cafe_ids
+    if (Array.isArray(body.cafe_ids)) {
+      console.log(`[cafe_visibility] sku=${sku} cafe_ids=${JSON.stringify(body.cafe_ids)}`);
+      try {
+        await pool.query(
+          `DELETE FROM item_cafe_visibility WHERE item_id = (SELECT id FROM items WHERE sku = $1)`,
+          [sku],
+        );
+        for (const cafeId of body.cafe_ids) {
+          await pool.query(
+            `INSERT INTO item_cafe_visibility (item_id, cafe_id)
+             SELECT id, $1 FROM items WHERE sku = $2
+             ON CONFLICT DO NOTHING`,
+            [cafeId, sku],
+          );
+        }
+        // Verify inserts landed
+        const verify = await pool.query(
+          `SELECT cafe_id FROM item_cafe_visibility WHERE item_id = (SELECT id FROM items WHERE sku = $1)`,
+          [sku],
+        );
+        console.log(`[cafe_visibility] verified rows in DB after save: ${JSON.stringify(verify.rows)}`);
+      } catch (visErr) {
+        console.error(`[cafe_visibility] FAILED for sku=${sku}:`, visErr);
+      }
+    }
+
     // Return updated row
     const result = await pool.query(
       `SELECT
@@ -123,7 +151,12 @@ export async function PATCH(
          NULL AS case_size,
          COALESCE(b.on_hand_qty, 0)::text AS on_hand_qty,
          ip.case_price::text,
-         ip.price_per_unit::text AS unit_price
+         ip.price_per_unit::text AS unit_price,
+         COALESCE(
+           (SELECT json_agg(icv.cafe_id ORDER BY icv.cafe_id)
+            FROM item_cafe_visibility icv WHERE icv.item_id = i.id),
+           '[]'::json
+         ) AS cafe_ids
        FROM items i
        LEFT JOIN inventory_locations l ON l.code = 'COMMISSARY'
        LEFT JOIN inventory_balances b ON b.item_id = i.id AND b.location_id = l.id

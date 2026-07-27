@@ -13,6 +13,7 @@ type InventoryItem = {
   units_per_case: string | null;
   case_price: string | null;
   unit_price: string | null;
+  cafe_ids: number[];
 };
 
 type OrderLine = {
@@ -63,13 +64,20 @@ export default function RequestPage() {
       const cafesData = (await cafesRes.json()) as { cafes?: Cafe[] };
       const invData = (await invRes.json()) as { items?: InventoryItem[] };
       setCafes(cafesData.cafes ?? []);
-      setItems(invData.items ?? []);
+      setItems((invData.items ?? []).map((item) => ({
+        ...item,
+        cafe_ids: (item.cafe_ids ?? []).map(Number),
+      })));
       setLoading(false);
     }
     init();
   }, [router]);
 
-  const selectedLines: OrderLine[] = items
+  const visibleItems = selectedCafe
+    ? items.filter((item) => item.cafe_ids.length === 0 || item.cafe_ids.includes(Number(selectedCafe.id)))
+    : items;
+
+  const selectedLines: OrderLine[] = visibleItems
     .map((item) => ({
       sku: item.sku,
       item_name: item.item_name,
@@ -259,7 +267,7 @@ export default function RequestPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e8dfc8]">
-              {items.map((item) => {
+              {visibleItems.map((item) => {
                 const hasIssue = validationIssues.some((i) => i.sku === item.sku);
                 return (
                   <tr

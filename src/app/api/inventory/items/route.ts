@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       unit_price?: number | null;
       on_hand_qty?: number;
       description?: string | null;
+      cafe_ids?: number[];
     };
 
     const name = body.name?.trim();
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
     const unit_price = body.unit_price ?? null;
     const on_hand_qty = body.on_hand_qty ?? 0;
     const description = body.description?.trim() || null;
+    const cafe_ids = Array.isArray(body.cafe_ids) ? body.cafe_ids : [];
 
     if (!name) {
       return NextResponse.json({ error: "Item name is required." }, { status: 400 });
@@ -93,7 +95,26 @@ export async function POST(request: NextRequest) {
       [sku, name, unit_type, units_per_case, unit_price, case_price, on_hand_qty, description],
     );
 
-    const item = result.rows[0];
+    const item = result.rows[0] as typeof result.rows[0] & { id?: number };
+
+    // Insert cafe visibility rows if specific cafes selected
+    if (cafe_ids.length > 0) {
+      const pool2 = getDbPool();
+      const itemIdRow = await pool2.query<{ id: number }>(
+        `SELECT id FROM items WHERE sku = $1`,
+        [item.sku],
+      );
+      const itemId = itemIdRow.rows[0]?.id;
+      if (itemId) {
+        for (const cafeId of cafe_ids) {
+          await pool2.query(
+            `INSERT INTO item_cafe_visibility (item_id, cafe_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+            [itemId, cafeId],
+          );
+        }
+      }
+    }
+
     await logAudit(session.email, "item_added", "item", item.sku, {
       sku: item.sku,
       name: item.item_name,

@@ -17,7 +17,10 @@ type MasterInventoryItem = {
   case_price: string | null;
   unit_price: string | null;
   units_per_case: number | null;
+  cafe_ids: number[];
 };
+
+type CafeOption = { id: number; code: string; name: string };
 
 type AddItemForm = {
   name: string;
@@ -27,6 +30,7 @@ type AddItemForm = {
   unit_price: string;
   on_hand_qty: string;
   description: string;
+  cafe_ids: number[];
 };
 
 const EMPTY_FORM: AddItemForm = {
@@ -37,6 +41,7 @@ const EMPTY_FORM: AddItemForm = {
   unit_price: "",
   on_hand_qty: "0",
   description: "",
+  cafe_ids: [],
 };
 
 function normalizeEmail(value: string) {
@@ -67,12 +72,14 @@ export default function Home() {
   const [inventoryItems, setInventoryItems] = useState<MasterInventoryItem[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [inventoryError, setInventoryError] = useState("");
+  const [cafeOptions, setCafeOptions] = useState<CafeOption[]>([]);
 
   // Add item modal state
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState<AddItemForm>(EMPTY_FORM);
   const [addError, setAddError] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [addRestricted, setAddRestricted] = useState(false);
 
   // Delete state
   const [hoveredSku, setHoveredSku] = useState<string | null>(null);
@@ -85,6 +92,7 @@ export default function Home() {
   const [editError, setEditError] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [editUnitPriceManuallyEdited, setEditUnitPriceManuallyEdited] = useState(false);
+  const [editRestricted, setEditRestricted] = useState(false);
 
   const normalizedEmail = useMemo(() => normalizeEmail(email), [email]);
   const emailLooksValid = isWmuEmail(normalizedEmail);
@@ -279,11 +287,15 @@ export default function Home() {
       setInventoryError("");
 
       try {
-        const response = await fetch("/api/inventory/master", { cache: "no-store" });
+        const [response, cafesRes] = await Promise.all([
+          fetch("/api/inventory/master", { cache: "no-store" }),
+          fetch("/api/cafes", { cache: "no-store" }),
+        ]);
         const data = (await response.json()) as {
           error?: string;
           items?: MasterInventoryItem[];
         };
+        const cafesData = (await cafesRes.json()) as { cafes?: CafeOption[] };
 
         if (!response.ok) {
           if (isMounted) {
@@ -293,7 +305,11 @@ export default function Home() {
         }
 
         if (isMounted) {
-          setInventoryItems(data.items || []);
+          setInventoryItems((data.items || []).map((item) => ({
+            ...item,
+            cafe_ids: (item.cafe_ids ?? []).map(Number),
+          })));
+          setCafeOptions(cafesData.cafes ?? []);
         }
       } catch {
         if (isMounted) {
@@ -332,6 +348,7 @@ export default function Home() {
 
   const openEditModal = (item: MasterInventoryItem) => {
     setEditingSku(item.sku);
+    const cafeIds = item.cafe_ids ?? [];
     setEditForm({
       name: item.item_name,
       unit_type: item.unit_type,
@@ -340,7 +357,9 @@ export default function Home() {
       unit_price: item.unit_price ? String(parseFloat(item.unit_price)) : "",
       on_hand_qty: item.on_hand_qty,
       description: item.description ?? "",
+      cafe_ids: cafeIds,
     });
+    setEditRestricted(cafeIds.length > 0);
     setEditError("");
     setEditUnitPriceManuallyEdited(true); // don't auto-override on open
   };
@@ -348,6 +367,7 @@ export default function Home() {
   const closeEditModal = () => {
     setEditingSku(null);
     setEditError("");
+    setEditRestricted(false);
   };
 
   const handleEditItem = async (event: FormEvent<HTMLFormElement>) => {
@@ -368,6 +388,7 @@ export default function Home() {
           unit_price: editForm.unit_price ? parseFloat(editForm.unit_price) : null,
           on_hand_qty: editForm.on_hand_qty ? parseFloat(editForm.on_hand_qty) : 0,
           description: editForm.description.trim() || null,
+          cafe_ids: editForm.cafe_ids,
         }),
       });
 
@@ -380,7 +401,7 @@ export default function Home() {
 
       if (data.item) {
         setInventoryItems((prev) =>
-          prev.map((item) => (item.sku === editingSku ? data.item! : item)),
+          prev.map((item) => (item.sku === editingSku ? { ...data.item!, cafe_ids: editForm.cafe_ids } : item)),
         );
       }
 
@@ -396,12 +417,14 @@ export default function Home() {
     setAddForm(EMPTY_FORM);
     setAddError("");
     setUnitPriceManuallyEdited(false);
+    setAddRestricted(false);
     setShowAddModal(true);
   };
 
   const closeAddModal = () => {
     setShowAddModal(false);
     setAddError("");
+    setAddRestricted(false);
   };
 
   const handleAddItem = async (event: FormEvent<HTMLFormElement>) => {
@@ -421,6 +444,7 @@ export default function Home() {
           unit_price: addForm.unit_price ? parseFloat(addForm.unit_price) : null,
           on_hand_qty: addForm.on_hand_qty ? parseFloat(addForm.on_hand_qty) : 0,
           description: addForm.description.trim() || null,
+          cafe_ids: addForm.cafe_ids,
         }),
       });
 
@@ -432,7 +456,7 @@ export default function Home() {
       }
 
       if (data.item) {
-        setInventoryItems((prev) => [...prev, data.item!]);
+        setInventoryItems((prev) => [...prev, { ...data.item!, cafe_ids: addForm.cafe_ids }]);
       }
 
       closeAddModal();
@@ -745,6 +769,51 @@ export default function Home() {
                   />
                 </div>
 
+                {/* Cafe Visibility */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-stone-700">Visible To</label>
+                  <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 space-y-2">
+                    {!addRestricted ? (
+                      <>
+                        <p className="text-sm text-stone-700 font-semibold">All Cafes <span className="text-xs text-stone-400 font-normal">(default)</span></p>
+                        <button
+                          type="button"
+                          onClick={() => { setAddRestricted(true); setAddForm((p) => ({ ...p, cafe_ids: [] })); }}
+                          className="text-xs text-[#c49a3c] font-semibold hover:underline"
+                        >
+                          Restrict to specific cafes →
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {cafeOptions.map((cafe) => (
+                          <label key={cafe.id} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={addForm.cafe_ids.includes(Number(cafe.id))}
+                              onChange={(e) => setAddForm((p) => ({
+                                ...p,
+                                cafe_ids: e.target.checked
+                                  ? [...p.cafe_ids, Number(cafe.id)]
+                                  : p.cafe_ids.filter((id) => id !== Number(cafe.id)),
+                              }))}
+                              className="rounded accent-[#c49a3c]"
+                            />
+                            <span className="text-sm text-stone-700">{cafe.name}</span>
+                          </label>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => { setAddRestricted(false); setAddForm((p) => ({ ...p, cafe_ids: [] })); }}
+                          className="text-xs text-stone-400 hover:text-stone-600 hover:underline"
+                        >
+                          ← Reset to All Cafes
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
                 {!!addError && <p className="text-sm font-medium text-red-700">{addError}</p>}
 
                 <div className="flex gap-3 pt-2">
@@ -894,6 +963,51 @@ export default function Home() {
                     placeholder="e.g. Whole milk, 1 gal jugs, case of 6"
                     className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#8a6331] focus:ring-2 focus:ring-[#d9b98a66] resize-none"
                   />
+                </div>
+
+                {/* Cafe Visibility */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-stone-700">Visible To</label>
+                  <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 space-y-2">
+                    {!editRestricted ? (
+                      <>
+                        <p className="text-sm text-stone-700 font-semibold">All Cafes <span className="text-xs text-stone-400 font-normal">(default)</span></p>
+                        <button
+                          type="button"
+                          onClick={() => { setEditRestricted(true); setEditForm((p) => ({ ...p, cafe_ids: [] })); }}
+                          className="text-xs text-[#c49a3c] font-semibold hover:underline"
+                        >
+                          Restrict to specific cafes →
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {cafeOptions.map((cafe) => (
+                          <label key={cafe.id} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editForm.cafe_ids.includes(Number(cafe.id))}
+                              onChange={(e) => setEditForm((p) => ({
+                                ...p,
+                                cafe_ids: e.target.checked
+                                  ? [...p.cafe_ids, Number(cafe.id)]
+                                  : p.cafe_ids.filter((id) => id !== Number(cafe.id)),
+                              }))}
+                              className="rounded accent-[#c49a3c]"
+                            />
+                            <span className="text-sm text-stone-700">{cafe.name}</span>
+                          </label>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => { setEditRestricted(false); setEditForm((p) => ({ ...p, cafe_ids: [] })); }}
+                          className="text-xs text-stone-400 hover:text-stone-600 hover:underline"
+                        >
+                          ← Reset to All Cafes
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {!!editError && <p className="text-sm font-medium text-red-700">{editError}</p>}
