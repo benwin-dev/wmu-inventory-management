@@ -5,7 +5,7 @@ import { getSession } from "@/lib/session-store";
 export async function GET(request: NextRequest) {
   try {
     const token = request.cookies.get("wmu_inventory_session")?.value;
-    const session = getSession(token);
+    const session = await getSession(token);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const pool = getDbPool();

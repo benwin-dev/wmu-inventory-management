@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/require-role";
 import { logAudit } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
-  const { session, error } = requireRole(request, ["admin"]);
+  const { session, error } = await requireRole(request, ["admin"]);
   if (error) return error;
   void session;
 
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { session, error } = requireRole(request, ["admin"]);
+  const { session, error } = await requireRole(request, ["admin"]);
   if (error) return error;
   void session;
 
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const { session, error } = requireRole(request, ["admin"]);
+  const { session, error } = await requireRole(request, ["admin"]);
   if (error) return error;
 
   const body = (await request.json()) as { email?: string };

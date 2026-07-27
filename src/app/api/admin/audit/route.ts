@@ -3,7 +3,7 @@ import { getDbPool } from "@/lib/db";
 import { requireRole } from "@/lib/require-role";
 
 export async function GET(request: NextRequest) {
-  const { session, error } = requireRole(request, ["admin"]);
+  const { session, error } = await requireRole(request, ["admin"]);
   if (error) return error;
   void session;
 

@@ -9,7 +9,7 @@ export async function DELETE(
 ) {
   try {
     const token = request.cookies.get("wmu_inventory_session")?.value;
-    const session = getSession(token);
+    const session = await getSession(token);
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -46,7 +46,7 @@ export async function PATCH(
 ) {
   try {
     const token = request.cookies.get("wmu_inventory_session")?.value;
-    const session = getSession(token);
+    const session = await getSession(token);
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

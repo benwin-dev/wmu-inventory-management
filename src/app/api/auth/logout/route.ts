@@ -3,7 +3,7 @@ import { deleteSession } from "@/lib/session-store";
 
 export async function POST(request: NextRequest) {
   const token = request.cookies.get("wmu_inventory_session")?.value;
-  deleteSession(token);
+  await deleteSession(token);
 
   const response = NextResponse.json({ ok: true }, { status: 200 });
 

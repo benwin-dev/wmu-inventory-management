@@ -1,43 +1,26 @@
 import crypto from "crypto";
+import { getDbPool } from "@/lib/db";
 
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
 
 export type UserRole = "admin" | "commissary" | "cafe" | "driver";
 
-type SessionRecord = {
+export type SessionRecord = {
   email: string;
   role: UserRole;
   cafe_id: number | null;
-  expiresAt: number;
 };
 
-const sessions = new Map<string, SessionRecord>();
-
-function now() {
-  return Date.now();
-}
-
-function cleanupExpiredSessions() {
-  const current = now();
-
-  for (const [token, session] of sessions.entries()) {
-    if (session.expiresAt <= current) {
-      sessions.delete(token);
-    }
-  }
-}
-
-export function createSession(email: string, role: UserRole = "cafe", cafe_id: number | null = null) {
-  cleanupExpiredSessions();
-
+export async function createSession(email: string, role: UserRole = "cafe", cafe_id: number | null = null) {
   const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS);
 
-  sessions.set(token, {
-    email,
-    role,
-    cafe_id,
-    expiresAt: now() + SESSION_MAX_AGE_MS,
-  });
+  const pool = getDbPool();
+  await pool.query(
+    `INSERT INTO sessions (token, email, role, cafe_id, expires_at)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [token, email, role, cafe_id, expiresAt],
+  );
 
   return {
     token,
@@ -45,34 +28,36 @@ export function createSession(email: string, role: UserRole = "cafe", cafe_id: n
   };
 }
 
-export function getSession(token?: string) {
-  cleanupExpiredSessions();
+export async function getSession(token?: string): Promise<SessionRecord | null> {
+  if (!token) return null;
 
-  if (!token) {
-    return null;
-  }
+  const pool = getDbPool();
+  const result = await pool.query<{ email: string; role: string; cafe_id: number | null }>(
+    `SELECT email, role, cafe_id FROM sessions WHERE token = $1 AND expires_at > NOW()`,
+    [token],
+  );
 
-  const session = sessions.get(token);
+  if (result.rows.length === 0) return null;
 
-  if (!session) {
-    return null;
-  }
-
-  return session;
+  const row = result.rows[0];
+  return {
+    email: row.email,
+    role: row.role as UserRole,
+    cafe_id: row.cafe_id ?? null,
+  };
 }
 
-export function deleteSession(token?: string) {
-  if (!token) {
-    return;
-  }
-
-  sessions.delete(token);
+export async function deleteSession(token?: string) {
+  if (!token) return;
+  const pool = getDbPool();
+  await pool.query(`DELETE FROM sessions WHERE token = $1`, [token]);
 }
 
-export function updateSessionRole(token: string, role: UserRole) {
-  const session = sessions.get(token);
-  if (!session) return false;
-  session.role = role;
-  sessions.set(token, session);
-  return true;
+export async function updateSessionRole(token: string, role: UserRole) {
+  const pool = getDbPool();
+  const result = await pool.query(
+    `UPDATE sessions SET role = $1 WHERE token = $2 AND expires_at > NOW()`,
+    [role, token],
+  );
+  return (result.rowCount ?? 0) > 0;
 }

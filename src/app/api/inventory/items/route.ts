@@ -15,7 +15,7 @@ function generateSku(name: string): string {
 export async function POST(request: NextRequest) {
   try {
     const token = request.cookies.get("wmu_inventory_session")?.value;
-    const session = getSession(token);
+    const session = await getSession(token);
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

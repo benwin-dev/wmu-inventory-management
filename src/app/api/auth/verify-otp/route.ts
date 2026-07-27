@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
       driver: "/fulfillment",
     };
 
-    const session = createSession(result.email, role, cafe_id);
+    const session = await createSession(result.email, role, cafe_id);
     const response = NextResponse.json({ email: result.email, role, cafe_id, redirect: redirectMap[role] }, { status: 200 });
 
     response.cookies.set({
