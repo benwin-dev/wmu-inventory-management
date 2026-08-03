@@ -79,6 +79,7 @@ export default function Home() {
   const [cafeOptions, setCafeOptions] = useState<CafeOption[]>([]);
   const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
   const [activeTagFilters, setActiveTagFilters] = useState<number[]>([]);
+  const [inventorySearch, setInventorySearch] = useState("");
 
   // Add item modal state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -597,6 +598,16 @@ export default function Home() {
               </div>
             )}
 
+            <div className="border-b border-stone-200 px-4 py-2.5">
+              <input
+                type="text"
+                value={inventorySearch}
+                onChange={(e) => setInventorySearch(e.target.value)}
+                placeholder="Search items..."
+                className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#c49a3c] focus:ring-2 focus:ring-[#c49a3c44]"
+              />
+            </div>
+
             <div className="overflow-x-auto">
               {inventoryLoading && <p className="px-4 py-3 text-sm text-stone-600">Loading inventory...</p>}
               {!!inventoryError && <p className="px-4 py-3 text-sm font-medium text-red-700">{inventoryError}</p>}
@@ -615,10 +626,12 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100">
-                    {(activeTagFilters.length > 0
-                      ? inventoryItems.filter((item) => activeTagFilters.some((tid) => item.tag_ids.includes(tid)))
-                      : inventoryItems
-                    ).map((item) => (
+                    {inventoryItems
+                      .filter((item) =>
+                        (activeTagFilters.length === 0 || activeTagFilters.some((tid) => item.tag_ids.includes(tid))) &&
+                        (inventorySearch.trim() === "" || item.item_name.toLowerCase().includes(inventorySearch.trim().toLowerCase()))
+                      )
+                      .map((item) => (
                       <tr
                         key={item.sku}
                         onMouseEnter={() => setHoveredSku(item.sku)}
