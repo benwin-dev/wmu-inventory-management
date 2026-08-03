@@ -702,8 +702,8 @@ export default function Home() {
         {/* Add Item Modal */}
         {showAddModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
+            <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh]">
+              <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4 shrink-0">
                 <h2 className="text-lg font-semibold text-stone-950">Add New Item</h2>
                 <button
                   type="button"
@@ -714,7 +714,7 @@ export default function Home() {
                 </button>
               </div>
 
-              <form onSubmit={handleAddItem} className="px-6 py-5 space-y-4">
+              <form onSubmit={handleAddItem} className="overflow-y-auto px-6 py-5 space-y-4">
                 {/* Name */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-stone-700">Item Name *</label>
@@ -932,13 +932,13 @@ export default function Home() {
         {/* Edit Item Modal */}
         {editingSku && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
+            <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh]">
+              <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4 shrink-0">
                 <h2 className="text-lg font-semibold text-stone-950">Edit Item</h2>
                 <button type="button" onClick={closeEditModal} className="text-stone-400 transition hover:text-stone-700">✕</button>
               </div>
 
-              <form onSubmit={handleEditItem} className="px-6 py-5 space-y-4">
+              <form onSubmit={handleEditItem} className="overflow-y-auto px-6 py-5 space-y-4">
                 {/* Name */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-stone-700">Item Name *</label>
