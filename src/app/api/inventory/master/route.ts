@@ -61,27 +61,38 @@ export async function GET(request: NextRequest) {
       `,
     );
 
-    // Separate query for cafe visibility — avoids pg array/json type parsing issues
+    // Separate query for cafe visibility
     const visibilityMap = new Map<number, number[]>();
     try {
-      const visResult = await pool.query(
-        `SELECT item_id, cafe_id FROM item_cafe_visibility`,
-      );
-      console.log(`[master] item_cafe_visibility rows: ${visResult.rowCount}`);
+      const visResult = await pool.query(`SELECT item_id, cafe_id FROM item_cafe_visibility`);
       for (const row of visResult.rows) {
         const itemId = Number(row.item_id);
-        const cafeId = Number(row.cafe_id);
         const existing = visibilityMap.get(itemId) ?? [];
-        existing.push(cafeId);
+        existing.push(Number(row.cafe_id));
         visibilityMap.set(itemId, existing);
       }
     } catch (visErr) {
       console.error("[master] item_cafe_visibility query failed:", visErr);
     }
 
+    // Separate query for tags
+    const tagsMap = new Map<number, number[]>();
+    try {
+      const tagsResult = await pool.query(`SELECT item_id, tag_id FROM item_tags`);
+      for (const row of tagsResult.rows) {
+        const itemId = Number(row.item_id);
+        const existing = tagsMap.get(itemId) ?? [];
+        existing.push(Number(row.tag_id));
+        tagsMap.set(itemId, existing);
+      }
+    } catch (tagErr) {
+      console.error("[master] item_tags query failed:", tagErr);
+    }
+
     const items = result.rows.map(({ id, ...item }) => ({
       ...item,
       cafe_ids: visibilityMap.get(Number(id)) ?? [],
+      tag_ids: tagsMap.get(Number(id)) ?? [],
     }));
 
     return NextResponse.json(

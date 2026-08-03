@@ -18,9 +18,11 @@ type MasterInventoryItem = {
   unit_price: string | null;
   units_per_case: number | null;
   cafe_ids: number[];
+  tag_ids: number[];
 };
 
 type CafeOption = { id: number; code: string; name: string };
+type TagOption = { id: number; name: string; slug: string };
 
 type AddItemForm = {
   name: string;
@@ -31,6 +33,7 @@ type AddItemForm = {
   on_hand_qty: string;
   description: string;
   cafe_ids: number[];
+  tag_ids: number[];
 };
 
 const EMPTY_FORM: AddItemForm = {
@@ -42,6 +45,7 @@ const EMPTY_FORM: AddItemForm = {
   on_hand_qty: "0",
   description: "",
   cafe_ids: [],
+  tag_ids: [],
 };
 
 function normalizeEmail(value: string) {
@@ -73,6 +77,8 @@ export default function Home() {
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [inventoryError, setInventoryError] = useState("");
   const [cafeOptions, setCafeOptions] = useState<CafeOption[]>([]);
+  const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
+  const [activeTagFilters, setActiveTagFilters] = useState<number[]>([]);
 
   // Add item modal state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -287,15 +293,17 @@ export default function Home() {
       setInventoryError("");
 
       try {
-        const [response, cafesRes] = await Promise.all([
+        const [response, cafesRes, tagsRes] = await Promise.all([
           fetch("/api/inventory/master", { cache: "no-store" }),
           fetch("/api/cafes", { cache: "no-store" }),
+          fetch("/api/tags", { cache: "no-store" }),
         ]);
         const data = (await response.json()) as {
           error?: string;
           items?: MasterInventoryItem[];
         };
         const cafesData = (await cafesRes.json()) as { cafes?: CafeOption[] };
+        const tagsData = (await tagsRes.json()) as { tags?: TagOption[] };
 
         if (!response.ok) {
           if (isMounted) {
@@ -308,8 +316,10 @@ export default function Home() {
           setInventoryItems((data.items || []).map((item) => ({
             ...item,
             cafe_ids: (item.cafe_ids ?? []).map(Number),
+            tag_ids: (item.tag_ids ?? []).map(Number),
           })));
           setCafeOptions(cafesData.cafes ?? []);
+          setTagOptions(tagsData.tags ?? []);
         }
       } catch {
         if (isMounted) {
@@ -358,6 +368,7 @@ export default function Home() {
       on_hand_qty: item.on_hand_qty,
       description: item.description ?? "",
       cafe_ids: cafeIds,
+      tag_ids: (item.tag_ids ?? []).map(Number),
     });
     setEditRestricted(cafeIds.length > 0);
     setEditError("");
@@ -389,6 +400,7 @@ export default function Home() {
           on_hand_qty: editForm.on_hand_qty ? parseFloat(editForm.on_hand_qty) : 0,
           description: editForm.description.trim() || null,
           cafe_ids: editForm.cafe_ids,
+          tag_ids: editForm.tag_ids,
         }),
       });
 
@@ -401,7 +413,7 @@ export default function Home() {
 
       if (data.item) {
         setInventoryItems((prev) =>
-          prev.map((item) => (item.sku === editingSku ? { ...data.item!, cafe_ids: editForm.cafe_ids } : item)),
+          prev.map((item) => (item.sku === editingSku ? { ...data.item!, cafe_ids: editForm.cafe_ids, tag_ids: editForm.tag_ids } : item)),
         );
       }
 
@@ -445,6 +457,7 @@ export default function Home() {
           on_hand_qty: addForm.on_hand_qty ? parseFloat(addForm.on_hand_qty) : 0,
           description: addForm.description.trim() || null,
           cafe_ids: addForm.cafe_ids,
+          tag_ids: addForm.tag_ids,
         }),
       });
 
@@ -456,7 +469,7 @@ export default function Home() {
       }
 
       if (data.item) {
-        setInventoryItems((prev) => [...prev, { ...data.item!, cafe_ids: addForm.cafe_ids }]);
+        setInventoryItems((prev) => [...prev, { ...data.item!, cafe_ids: addForm.cafe_ids, tag_ids: addForm.tag_ids }]);
       }
 
       closeAddModal();
@@ -549,6 +562,41 @@ export default function Home() {
                 + Add Item
               </button>
             </div>
+
+            {tagOptions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 px-4 py-2.5">
+                <span className="text-xs font-semibold text-stone-400 uppercase">Filter:</span>
+                {tagOptions.map((tag) => {
+                  const active = activeTagFilters.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => setActiveTagFilters((prev) =>
+                        active ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
+                      )}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                        active
+                          ? "border-[#c49a3c] bg-[#c49a3c] text-white"
+                          : "border-stone-300 bg-white text-stone-600 hover:border-[#c49a3c] hover:text-[#c49a3c]"
+                      }`}
+                    >
+                      {tag.name}
+                    </button>
+                  );
+                })}
+                {activeTagFilters.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTagFilters([])}
+                    className="text-xs text-stone-400 hover:text-stone-600 transition"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               {inventoryLoading && <p className="px-4 py-3 text-sm text-stone-600">Loading inventory...</p>}
               {!!inventoryError && <p className="px-4 py-3 text-sm font-medium text-red-700">{inventoryError}</p>}
@@ -567,7 +615,10 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100">
-                    {inventoryItems.map((item) => (
+                    {(activeTagFilters.length > 0
+                      ? inventoryItems.filter((item) => activeTagFilters.some((tid) => item.tag_ids.includes(tid)))
+                      : inventoryItems
+                    ).map((item) => (
                       <tr
                         key={item.sku}
                         onMouseEnter={() => setHoveredSku(item.sku)}
@@ -814,6 +865,34 @@ export default function Home() {
                   </div>
                 </div>
 
+                {/* Tags */}
+                {tagOptions.length > 0 && (
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-stone-700">Tags</label>
+                    <div className="flex flex-wrap gap-2">
+                      {tagOptions.map((tag) => {
+                        const checked = addForm.tag_ids.includes(tag.id);
+                        return (
+                          <label key={tag.id} className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => setAddForm((p) => ({
+                                ...p,
+                                tag_ids: e.target.checked
+                                  ? [...p.tag_ids, tag.id]
+                                  : p.tag_ids.filter((id) => id !== tag.id),
+                              }))}
+                              className="rounded accent-[#c49a3c]"
+                            />
+                            <span className="text-sm text-stone-700">{tag.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {!!addError && <p className="text-sm font-medium text-red-700">{addError}</p>}
 
                 <div className="flex gap-3 pt-2">
@@ -1009,6 +1088,34 @@ export default function Home() {
                     )}
                   </div>
                 </div>
+
+                {/* Tags */}
+                {tagOptions.length > 0 && (
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-stone-700">Tags</label>
+                    <div className="flex flex-wrap gap-2">
+                      {tagOptions.map((tag) => {
+                        const checked = editForm.tag_ids.includes(tag.id);
+                        return (
+                          <label key={tag.id} className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => setEditForm((p) => ({
+                                ...p,
+                                tag_ids: e.target.checked
+                                  ? [...p.tag_ids, tag.id]
+                                  : p.tag_ids.filter((id) => id !== tag.id),
+                              }))}
+                              className="rounded accent-[#c49a3c]"
+                            />
+                            <span className="text-sm text-stone-700">{tag.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {!!editError && <p className="text-sm font-medium text-red-700">{editError}</p>}
 

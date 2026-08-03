@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
       on_hand_qty?: number;
       description?: string | null;
       cafe_ids?: number[];
+      tag_ids?: number[];
     };
 
     const name = body.name?.trim();
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
     const on_hand_qty = body.on_hand_qty ?? 0;
     const description = body.description?.trim() || null;
     const cafe_ids = Array.isArray(body.cafe_ids) ? body.cafe_ids : [];
+    const tag_ids = Array.isArray(body.tag_ids) ? body.tag_ids : [];
 
     if (!name) {
       return NextResponse.json({ error: "Item name is required." }, { status: 400 });
@@ -97,19 +99,24 @@ export async function POST(request: NextRequest) {
 
     const item = result.rows[0] as typeof result.rows[0] & { id?: number };
 
-    // Insert cafe visibility rows if specific cafes selected
-    if (cafe_ids.length > 0) {
-      const pool2 = getDbPool();
-      const itemIdRow = await pool2.query<{ id: number }>(
+    // Insert cafe visibility and tag rows
+    if (cafe_ids.length > 0 || tag_ids.length > 0) {
+      const itemIdRow = await pool.query<{ id: number }>(
         `SELECT id FROM items WHERE sku = $1`,
         [item.sku],
       );
       const itemId = itemIdRow.rows[0]?.id;
       if (itemId) {
         for (const cafeId of cafe_ids) {
-          await pool2.query(
+          await pool.query(
             `INSERT INTO item_cafe_visibility (item_id, cafe_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
             [itemId, cafeId],
+          );
+        }
+        for (const tagId of tag_ids) {
+          await pool.query(
+            `INSERT INTO item_tags (item_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+            [itemId, tagId],
           );
         }
       }

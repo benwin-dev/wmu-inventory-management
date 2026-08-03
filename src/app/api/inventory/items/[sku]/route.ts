@@ -81,6 +81,7 @@ export async function PATCH(
       on_hand_qty?: number;
       description?: string | null;
       cafe_ids?: number[];
+      tag_ids?: number[];
     };
 
     const pool = getDbPool();
@@ -137,6 +138,26 @@ export async function PATCH(
         console.log(`[cafe_visibility] verified rows in DB after save: ${JSON.stringify(verify.rows)}`);
       } catch (visErr) {
         console.error(`[cafe_visibility] FAILED for sku=${sku}:`, visErr);
+      }
+    }
+
+    // Replace tag rows
+    if (Array.isArray(body.tag_ids)) {
+      try {
+        await pool.query(
+          `DELETE FROM item_tags WHERE item_id = (SELECT id FROM items WHERE sku = $1)`,
+          [sku],
+        );
+        for (const tagId of body.tag_ids) {
+          await pool.query(
+            `INSERT INTO item_tags (item_id, tag_id)
+             SELECT id, $1 FROM items WHERE sku = $2
+             ON CONFLICT DO NOTHING`,
+            [tagId, sku],
+          );
+        }
+      } catch (tagErr) {
+        console.error(`[item_tags] FAILED for sku=${sku}:`, tagErr);
       }
     }
 

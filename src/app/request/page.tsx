@@ -14,7 +14,10 @@ type InventoryItem = {
   case_price: string | null;
   unit_price: string | null;
   cafe_ids: number[];
+  tag_ids: number[];
 };
+
+type TagOption = { id: number; name: string; slug: string };
 
 type OrderLine = {
   sku: string;
@@ -50,6 +53,9 @@ export default function RequestPage() {
   const [error, setError] = useState("");
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [search, setSearch] = useState("");
+  const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
+  const [activeTagFilters, setActiveTagFilters] = useState<number[]>([]);
 
   useEffect(() => {
     async function init() {
@@ -60,17 +66,21 @@ export default function RequestPage() {
       const userCafeId = sessionData.cafe_id ? Number(sessionData.cafe_id) : null;
       setSessionCafeId(userCafeId);
 
-      const [cafesRes, invRes] = await Promise.all([
+      const [cafesRes, invRes, tagsRes] = await Promise.all([
         fetch("/api/cafes", { cache: "no-store" }),
         fetch("/api/inventory/master", { cache: "no-store" }),
+        fetch("/api/tags", { cache: "no-store" }),
       ]);
       const cafesData = (await cafesRes.json()) as { cafes?: Cafe[] };
       const invData = (await invRes.json()) as { items?: InventoryItem[] };
+      const tagsData = (await tagsRes.json()) as { tags?: TagOption[] };
       const allCafes = cafesData.cafes ?? [];
       setCafes(allCafes);
+      setTagOptions(tagsData.tags ?? []);
       setItems((invData.items ?? []).map((item) => ({
         ...item,
         cafe_ids: (item.cafe_ids ?? []).map(Number),
+        tag_ids: (item.tag_ids ?? []).map(Number),
       })));
 
       // Auto-select cafe for cafe-specific users
@@ -84,11 +94,19 @@ export default function RequestPage() {
     init();
   }, [router]);
 
-  const visibleItems = selectedCafe
+  const cafeFilteredItems = selectedCafe
     ? items.filter((item) => item.cafe_ids.length === 0 || item.cafe_ids.includes(Number(selectedCafe.id)))
     : items;
 
-  const selectedLines: OrderLine[] = visibleItems
+  const tagFilteredItems = activeTagFilters.length > 0
+    ? cafeFilteredItems.filter((item) => activeTagFilters.some((tid) => item.tag_ids.includes(tid)))
+    : cafeFilteredItems;
+
+  const visibleItems = search.trim()
+    ? tagFilteredItems.filter((item) => item.item_name.toLowerCase().includes(search.trim().toLowerCase()))
+    : tagFilteredItems;
+
+  const selectedLines: OrderLine[] = cafeFilteredItems
     .map((item) => ({
       sku: item.sku,
       item_name: item.item_name,
@@ -275,6 +293,50 @@ export default function RequestPage() {
           <div className="border-b border-[#d6c9b0] bg-[#f3ead8] px-4 py-3">
             <h2 className="font-bold text-[#2f200f]">{selectedCafe ? `${selectedCafe.name} Request Form` : "Request Form"}</h2>
             <p className="mt-1 text-sm text-[#7a6040]">Enter the quantity you need for each item. Leave blank to skip.</p>
+          </div>
+
+          {tagOptions.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-[#d6c9b0] px-4 py-2.5">
+              <span className="text-xs font-semibold text-[#7a6040] uppercase">Filter:</span>
+              {tagOptions.map((tag) => {
+                const active = activeTagFilters.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => setActiveTagFilters((prev) =>
+                      active ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
+                    )}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                      active
+                        ? "border-[#c49a3c] bg-[#c49a3c] text-white"
+                        : "border-[#c9b48a] bg-[#faf6ee] text-[#7a6040] hover:border-[#c49a3c] hover:text-[#c49a3c]"
+                    }`}
+                  >
+                    {tag.name}
+                  </button>
+                );
+              })}
+              {activeTagFilters.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTagFilters([])}
+                  className="text-xs text-[#7a6040] hover:text-[#2f200f] transition"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="px-4 py-3 border-b border-[#d6c9b0]">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search items..."
+              className="w-full rounded-lg border border-[#c9b48a] bg-[#faf6ee] px-3 py-2 text-sm text-[#2f200f] outline-none focus:border-[#c49a3c] focus:ring-2 focus:ring-[#c49a3c44]"
+            />
           </div>
 
           <table className="min-w-full text-left text-sm">
