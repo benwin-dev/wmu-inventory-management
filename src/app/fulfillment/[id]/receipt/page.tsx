@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 
 type ReceiptLine = {
@@ -210,7 +210,7 @@ export default function ReceiptPage() {
               {categoryGroups.map((group) => {
                 const catStats = lineStats(group.lines);
                 return (
-                  <>
+                  <React.Fragment key={group.key}>
                     {/* Category heading row */}
                     <tr key={`heading-${group.key}`} className="bg-[#f3ead8]">
                       <td colSpan={8} className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-[#5c3a18]">
@@ -252,7 +252,7 @@ export default function ReceiptPage() {
                       <td className="px-4 py-2" />
                       <td className="px-4 py-2 text-right text-xs font-bold text-stone-800">${catStats.value.toFixed(2)}</td>
                     </tr>
-                  </>
+                  </React.Fragment>
                 );
               })}
             </tbody>
