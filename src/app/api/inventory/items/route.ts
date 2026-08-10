@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
       description?: string | null;
       cafe_ids?: number[];
       tag_ids?: number[];
+      category?: string;
     };
 
     const name = body.name?.trim();
@@ -42,6 +43,8 @@ export async function POST(request: NextRequest) {
     const description = body.description?.trim() || null;
     const cafe_ids = Array.isArray(body.cafe_ids) ? body.cafe_ids : [];
     const tag_ids = Array.isArray(body.tag_ids) ? body.tag_ids : [];
+    const validCategories = ["food", "nonfood", "produce"];
+    const category = validCategories.includes(body.category ?? "") ? body.category! : "food";
 
     if (!name) {
       return NextResponse.json({ error: "Item name is required." }, { status: 400 });
@@ -64,9 +67,9 @@ export async function POST(request: NextRequest) {
     const result = await pool.query(
       `
       WITH inserted_item AS (
-        INSERT INTO items (sku, name, unit_type, units_per_case, description, active)
-        VALUES ($1, $2, $3, $4, $8, TRUE)
-        RETURNING id, sku, name, unit_type, units_per_case, description
+        INSERT INTO items (sku, name, unit_type, units_per_case, description, category, active)
+        VALUES ($1, $2, $3, $4, $8, $9, TRUE)
+        RETURNING id, sku, name, unit_type, units_per_case, description, category
       ),
       inserted_price AS (
         INSERT INTO item_prices (item_id, price_per_unit, case_price, effective_from)
@@ -85,6 +88,7 @@ export async function POST(request: NextRequest) {
         i.sku,
         i.name AS item_name,
         i.unit_type,
+        i.category,
         i.units_per_case::text,
         NULL AS case_size,
         COALESCE(b.on_hand_qty, 0)::text AS on_hand_qty,
@@ -94,7 +98,7 @@ export async function POST(request: NextRequest) {
       LEFT JOIN inserted_price p ON p.item_id = i.id
       LEFT JOIN inserted_balance b ON TRUE
       `,
-      [sku, name, unit_type, units_per_case, unit_price, case_price, on_hand_qty, description],
+      [sku, name, unit_type, units_per_case, unit_price, case_price, on_hand_qty, description, category],
     );
 
     const item = result.rows[0] as typeof result.rows[0] & { id?: number };

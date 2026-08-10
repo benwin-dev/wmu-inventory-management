@@ -64,6 +64,7 @@ export async function GET(
       sku: string;
       item_name: string;
       unit_type: string;
+      category: string;
       requested_qty: string;
       fulfilled_qty: string | null;
       unit_price: string | null;
@@ -72,6 +73,7 @@ export async function GET(
          i.sku,
          i.name AS item_name,
          i.unit_type,
+         i.category,
          srl.requested_qty::text,
          srl.fulfilled_qty::text,
          (

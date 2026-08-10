@@ -19,6 +19,7 @@ type MasterInventoryItem = {
   units_per_case: number | null;
   cafe_ids: number[];
   tag_ids: number[];
+  category: string;
 };
 
 type CafeOption = { id: number; code: string; name: string };
@@ -34,6 +35,7 @@ type AddItemForm = {
   description: string;
   cafe_ids: number[];
   tag_ids: number[];
+  category: string;
 };
 
 const EMPTY_FORM: AddItemForm = {
@@ -46,6 +48,7 @@ const EMPTY_FORM: AddItemForm = {
   description: "",
   cafe_ids: [],
   tag_ids: [],
+  category: "food",
 };
 
 function normalizeEmail(value: string) {
@@ -79,6 +82,7 @@ export default function Home() {
   const [cafeOptions, setCafeOptions] = useState<CafeOption[]>([]);
   const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
   const [activeTagFilters, setActiveTagFilters] = useState<number[]>([]);
+  const [activeCategoryFilters, setActiveCategoryFilters] = useState<string[]>([]);
   const [inventorySearch, setInventorySearch] = useState("");
 
   // Add item modal state
@@ -318,6 +322,7 @@ export default function Home() {
             ...item,
             cafe_ids: (item.cafe_ids ?? []).map(Number),
             tag_ids: (item.tag_ids ?? []).map(Number),
+            category: item.category ?? "food",
           })));
           setCafeOptions(cafesData.cafes ?? []);
           setTagOptions(tagsData.tags ?? []);
@@ -370,6 +375,7 @@ export default function Home() {
       description: item.description ?? "",
       cafe_ids: cafeIds,
       tag_ids: (item.tag_ids ?? []).map(Number),
+      category: item.category ?? "food",
     });
     setEditRestricted(cafeIds.length > 0);
     setEditError("");
@@ -402,6 +408,7 @@ export default function Home() {
           description: editForm.description.trim() || null,
           cafe_ids: editForm.cafe_ids,
           tag_ids: editForm.tag_ids,
+          category: editForm.category,
         }),
       });
 
@@ -414,7 +421,7 @@ export default function Home() {
 
       if (data.item) {
         setInventoryItems((prev) =>
-          prev.map((item) => (item.sku === editingSku ? { ...data.item!, cafe_ids: editForm.cafe_ids, tag_ids: editForm.tag_ids } : item)),
+          prev.map((item) => (item.sku === editingSku ? { ...data.item!, cafe_ids: editForm.cafe_ids, tag_ids: editForm.tag_ids, category: editForm.category } : item)),
         );
       }
 
@@ -459,6 +466,7 @@ export default function Home() {
           description: addForm.description.trim() || null,
           cafe_ids: addForm.cafe_ids,
           tag_ids: addForm.tag_ids,
+          category: addForm.category,
         }),
       });
 
@@ -470,7 +478,7 @@ export default function Home() {
       }
 
       if (data.item) {
-        setInventoryItems((prev) => [...prev, { ...data.item!, cafe_ids: addForm.cafe_ids, tag_ids: addForm.tag_ids }]);
+        setInventoryItems((prev) => [...prev, { ...data.item!, cafe_ids: addForm.cafe_ids, tag_ids: addForm.tag_ids, category: addForm.category }]);
       }
 
       closeAddModal();
@@ -564,9 +572,38 @@ export default function Home() {
               </button>
             </div>
 
-            {tagOptions.length > 0 && (
+            {(tagOptions.length > 0 || true) && (
               <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 px-4 py-2.5">
                 <span className="text-xs font-semibold text-stone-400 uppercase">Filter:</span>
+
+                {/* Category filters */}
+                {[
+                  { slug: "food", label: "Food" },
+                  { slug: "nonfood", label: "Non-Food" },
+                  { slug: "produce", label: "Produce" },
+                ].map(({ slug, label }) => {
+                  const active = activeCategoryFilters.includes(slug);
+                  return (
+                    <button
+                      key={slug}
+                      type="button"
+                      onClick={() => setActiveCategoryFilters((prev) =>
+                        active ? prev.filter((s) => s !== slug) : [...prev, slug]
+                      )}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                        active
+                          ? "border-[#4a2f14] bg-[#4a2f14] text-white"
+                          : "border-stone-300 bg-white text-stone-600 hover:border-[#4a2f14] hover:text-[#4a2f14]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+
+                {tagOptions.length > 0 && <span className="text-stone-200">|</span>}
+
+                {/* Tag filters */}
                 {tagOptions.map((tag) => {
                   const active = activeTagFilters.includes(tag.id);
                   return (
@@ -586,13 +623,14 @@ export default function Home() {
                     </button>
                   );
                 })}
-                {activeTagFilters.length > 0 && (
+
+                {(activeTagFilters.length > 0 || activeCategoryFilters.length > 0) && (
                   <button
                     type="button"
-                    onClick={() => setActiveTagFilters([])}
+                    onClick={() => { setActiveTagFilters([]); setActiveCategoryFilters([]); }}
                     className="text-xs text-stone-400 hover:text-stone-600 transition"
                   >
-                    Clear
+                    Clear all
                   </button>
                 )}
               </div>
@@ -628,6 +666,7 @@ export default function Home() {
                   <tbody className="divide-y divide-stone-100">
                     {inventoryItems
                       .filter((item) =>
+                        (activeCategoryFilters.length === 0 || activeCategoryFilters.includes(item.category)) &&
                         (activeTagFilters.length === 0 || activeTagFilters.some((tid) => item.tag_ids.includes(tid))) &&
                         (inventorySearch.trim() === "" || item.item_name.toLowerCase().includes(inventorySearch.trim().toLowerCase()))
                       )
@@ -878,6 +917,31 @@ export default function Home() {
                   </div>
                 </div>
 
+                {/* Category */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-stone-700">Category</label>
+                  <div className="flex gap-2">
+                    {[
+                      { value: "food", label: "Food" },
+                      { value: "nonfood", label: "Non-Food" },
+                      { value: "produce", label: "Produce" },
+                    ].map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setAddForm((p) => ({ ...p, category: value }))}
+                        className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition ${
+                          addForm.category === value
+                            ? "border-[#4a2f14] bg-[#4a2f14] text-white"
+                            : "border-stone-300 bg-white text-stone-600 hover:border-[#4a2f14] hover:text-[#4a2f14]"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Tags */}
                 {tagOptions.length > 0 && (
                   <div>
@@ -1099,6 +1163,31 @@ export default function Home() {
                         </button>
                       </>
                     )}
+                  </div>
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-stone-700">Category</label>
+                  <div className="flex gap-2">
+                    {[
+                      { value: "food", label: "Food" },
+                      { value: "nonfood", label: "Non-Food" },
+                      { value: "produce", label: "Produce" },
+                    ].map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setEditForm((p) => ({ ...p, category: value }))}
+                        className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition ${
+                          editForm.category === value
+                            ? "border-[#4a2f14] bg-[#4a2f14] text-white"
+                            : "border-stone-300 bg-white text-stone-600 hover:border-[#4a2f14] hover:text-[#4a2f14]"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 

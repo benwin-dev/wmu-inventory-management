@@ -15,6 +15,7 @@ type InventoryItem = {
   unit_price: string | null;
   cafe_ids: number[];
   tag_ids: number[];
+  category: string;
 };
 
 type TagOption = { id: number; name: string; slug: string };
@@ -56,6 +57,7 @@ export default function RequestPage() {
   const [search, setSearch] = useState("");
   const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
   const [activeTagFilters, setActiveTagFilters] = useState<number[]>([]);
+  const [activeCategoryFilters, setActiveCategoryFilters] = useState<string[]>([]);
 
   useEffect(() => {
     async function init() {
@@ -81,6 +83,7 @@ export default function RequestPage() {
         ...item,
         cafe_ids: (item.cafe_ids ?? []).map(Number),
         tag_ids: (item.tag_ids ?? []).map(Number),
+        category: item.category ?? "food",
       })));
 
       // Auto-select cafe for cafe-specific users
@@ -98,9 +101,13 @@ export default function RequestPage() {
     ? items.filter((item) => item.cafe_ids.length === 0 || item.cafe_ids.includes(Number(selectedCafe.id)))
     : items;
 
-  const tagFilteredItems = activeTagFilters.length > 0
-    ? cafeFilteredItems.filter((item) => activeTagFilters.some((tid) => item.tag_ids.includes(tid)))
+  const categoryFilteredItems = activeCategoryFilters.length > 0
+    ? cafeFilteredItems.filter((item) => activeCategoryFilters.includes(item.category))
     : cafeFilteredItems;
+
+  const tagFilteredItems = activeTagFilters.length > 0
+    ? categoryFilteredItems.filter((item) => activeTagFilters.some((tid) => item.tag_ids.includes(tid)))
+    : categoryFilteredItems;
 
   const visibleItems = search.trim()
     ? tagFilteredItems.filter((item) => item.item_name.toLowerCase().includes(search.trim().toLowerCase()))
@@ -295,39 +302,67 @@ export default function RequestPage() {
             <p className="mt-1 text-sm text-[#7a6040]">Enter the quantity you need for each item. Leave blank to skip.</p>
           </div>
 
-          {tagOptions.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 border-b border-[#d6c9b0] px-4 py-2.5">
-              <span className="text-xs font-semibold text-[#7a6040] uppercase">Filter:</span>
-              {tagOptions.map((tag) => {
-                const active = activeTagFilters.includes(tag.id);
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => setActiveTagFilters((prev) =>
-                      active ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
-                    )}
-                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                      active
-                        ? "border-[#c49a3c] bg-[#c49a3c] text-white"
-                        : "border-[#c9b48a] bg-[#faf6ee] text-[#7a6040] hover:border-[#c49a3c] hover:text-[#c49a3c]"
-                    }`}
-                  >
-                    {tag.name}
-                  </button>
-                );
-              })}
-              {activeTagFilters.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-[#d6c9b0] px-4 py-2.5">
+            <span className="text-xs font-semibold text-[#7a6040] uppercase">Filter:</span>
+
+            {/* Category filters */}
+            {[
+              { slug: "food", label: "Food" },
+              { slug: "nonfood", label: "Non-Food" },
+              { slug: "produce", label: "Produce" },
+            ].map(({ slug, label }) => {
+              const active = activeCategoryFilters.includes(slug);
+              return (
                 <button
+                  key={slug}
                   type="button"
-                  onClick={() => setActiveTagFilters([])}
-                  className="text-xs text-[#7a6040] hover:text-[#2f200f] transition"
+                  onClick={() => setActiveCategoryFilters((prev) =>
+                    active ? prev.filter((s) => s !== slug) : [...prev, slug]
+                  )}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                    active
+                      ? "border-[#4a2f14] bg-[#4a2f14] text-white"
+                      : "border-[#c9b48a] bg-[#faf6ee] text-[#7a6040] hover:border-[#4a2f14] hover:text-[#4a2f14]"
+                  }`}
                 >
-                  Clear
+                  {label}
                 </button>
-              )}
-            </div>
-          )}
+              );
+            })}
+
+            {tagOptions.length > 0 && <span className="text-[#c9b48a]">|</span>}
+
+            {/* Tag filters */}
+            {tagOptions.map((tag) => {
+              const active = activeTagFilters.includes(tag.id);
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => setActiveTagFilters((prev) =>
+                    active ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
+                  )}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                    active
+                      ? "border-[#c49a3c] bg-[#c49a3c] text-white"
+                      : "border-[#c9b48a] bg-[#faf6ee] text-[#7a6040] hover:border-[#c49a3c] hover:text-[#c49a3c]"
+                  }`}
+                >
+                  {tag.name}
+                </button>
+              );
+            })}
+
+            {(activeTagFilters.length > 0 || activeCategoryFilters.length > 0) && (
+              <button
+                type="button"
+                onClick={() => { setActiveTagFilters([]); setActiveCategoryFilters([]); }}
+                className="text-xs text-[#7a6040] hover:text-[#2f200f] transition"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
 
           <div className="px-4 py-3 border-b border-[#d6c9b0]">
             <input

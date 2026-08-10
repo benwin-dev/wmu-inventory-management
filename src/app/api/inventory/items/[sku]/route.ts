@@ -82,16 +82,20 @@ export async function PATCH(
       description?: string | null;
       cafe_ids?: number[];
       tag_ids?: number[];
+      category?: string;
     };
 
     const pool = getDbPool();
 
+    const validCategories = ["food", "nonfood", "produce"];
+    const category = validCategories.includes(body.category ?? "") ? body.category! : "food";
+
     // Update items table
     await pool.query(
       `UPDATE items
-       SET name = $1, unit_type = $2, units_per_case = $3, description = $4, updated_at = NOW()
-       WHERE sku = $5`,
-      [body.name, body.unit_type, body.units_per_case ?? null, body.description?.trim() ?? null, sku],
+       SET name = $1, unit_type = $2, units_per_case = $3, description = $4, category = $5, updated_at = NOW()
+       WHERE sku = $6`,
+      [body.name, body.unit_type, body.units_per_case ?? null, body.description?.trim() ?? null, category, sku],
     );
 
     // Update current price row (effective_to IS NULL)
@@ -116,7 +120,6 @@ export async function PATCH(
 
     // Replace cafe visibility rows BEFORE the final SELECT so response has correct cafe_ids
     if (Array.isArray(body.cafe_ids)) {
-      console.log(`[cafe_visibility] sku=${sku} cafe_ids=${JSON.stringify(body.cafe_ids)}`);
       try {
         await pool.query(
           `DELETE FROM item_cafe_visibility WHERE item_id = (SELECT id FROM items WHERE sku = $1)`,
@@ -130,12 +133,6 @@ export async function PATCH(
             [cafeId, sku],
           );
         }
-        // Verify inserts landed
-        const verify = await pool.query(
-          `SELECT cafe_id FROM item_cafe_visibility WHERE item_id = (SELECT id FROM items WHERE sku = $1)`,
-          [sku],
-        );
-        console.log(`[cafe_visibility] verified rows in DB after save: ${JSON.stringify(verify.rows)}`);
       } catch (visErr) {
         console.error(`[cafe_visibility] FAILED for sku=${sku}:`, visErr);
       }

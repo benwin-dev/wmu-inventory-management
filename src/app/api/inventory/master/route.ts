@@ -13,6 +13,7 @@ type InventoryRow = {
   case_price: string | null;
   unit_price: string | null;
   description: string | null;
+  category: string;
 };
 
 export async function GET(request: NextRequest) {
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest) {
         i.name AS item_name,
         i.description,
         i.unit_type,
+        i.category,
         i.case_size,
         i.units_per_case::text,
         COALESCE(b.on_hand_qty, 0)::text AS on_hand_qty,

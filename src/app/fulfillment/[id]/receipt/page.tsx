@@ -7,6 +7,7 @@ type ReceiptLine = {
   sku: string;
   item_name: string;
   unit_type: string;
+  category: string;
   requested_qty: string;
   fulfilled_qty: string | null;
   unit_price: string | null;
@@ -96,14 +97,36 @@ export default function ReceiptPage() {
   const receiptNo = `TR-${year}-${padId(req.id)}`;
   const requestNo = `REQ-${year}-${padId(req.id)}`;
 
-  const totalRequestedUnits = lines.reduce((s, l) => s + parseFloat(l.requested_qty), 0);
-  const totalFulfilledUnits = lines.reduce((s, l) => s + parseFloat(l.fulfilled_qty ?? l.requested_qty), 0);
-  const totalShortUnits = totalRequestedUnits - totalFulfilledUnits;
-  const totalValue = lines.reduce((s, l) => {
-    const price = l.unit_price ? parseFloat(l.unit_price) : null;
-    const qty = parseFloat(l.fulfilled_qty ?? l.requested_qty);
-    return price != null ? s + price * qty : s;
-  }, 0);
+  const CATEGORY_ORDER = ["food", "nonfood", "produce"] as const;
+  const CATEGORY_LABELS: Record<string, string> = { food: "Food", nonfood: "Non-Food", produce: "Produce" };
+
+  type CatKey = typeof CATEGORY_ORDER[number] | "other";
+  const grouped: Record<CatKey, ReceiptLine[]> = { food: [], nonfood: [], produce: [], other: [] };
+  for (const line of lines) {
+    const key = (CATEGORY_ORDER as readonly string[]).includes(line.category) ? (line.category as CatKey) : "other";
+    grouped[key].push(line);
+  }
+  const categoryGroups: { key: CatKey; label: string; lines: ReceiptLine[] }[] = [
+    ...CATEGORY_ORDER.map((k) => ({ key: k as CatKey, label: CATEGORY_LABELS[k], lines: grouped[k] })),
+    ...(grouped.other.length > 0 ? [{ key: "other" as CatKey, label: "Uncategorized", lines: grouped.other }] : []),
+  ].filter((g) => g.lines.length > 0);
+
+  const lineStats = (ls: ReceiptLine[]) => {
+    const requested = ls.reduce((s, l) => s + parseFloat(l.requested_qty), 0);
+    const fulfilled = ls.reduce((s, l) => s + parseFloat(l.fulfilled_qty ?? l.requested_qty), 0);
+    const value = ls.reduce((s, l) => {
+      const price = l.unit_price ? parseFloat(l.unit_price) : null;
+      const qty = parseFloat(l.fulfilled_qty ?? l.requested_qty);
+      return price != null ? s + price * qty : s;
+    }, 0);
+    return { requested, fulfilled, short: requested - fulfilled, value };
+  };
+
+  const totals = lineStats(lines);
+  const totalRequestedUnits = totals.requested;
+  const totalFulfilledUnits = totals.fulfilled;
+  const totalShortUnits = totals.short;
+  const totalValue = totals.value;
 
   return (
     <main className="min-h-screen bg-white text-stone-900">
@@ -184,25 +207,52 @@ export default function ReceiptPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {lines.map((line) => {
-                const requested = parseFloat(line.requested_qty);
-                const fulfilled = parseFloat(line.fulfilled_qty ?? line.requested_qty);
-                const diff = requested - fulfilled;
-                const price = line.unit_price ? parseFloat(line.unit_price) : null;
-                const total = price != null ? price * fulfilled : null;
+              {categoryGroups.map((group) => {
+                const catStats = lineStats(group.lines);
                 return (
-                  <tr key={line.sku} className={diff > 0 ? "bg-orange-50" : ""}>
-                    <td className="px-4 py-3 font-mono text-xs text-stone-500">{line.sku}</td>
-                    <td className="px-4 py-3 font-medium text-stone-900">{line.item_name}</td>
-                    <td className="px-4 py-3 text-stone-500">{line.unit_type}</td>
-                    <td className="px-4 py-3 text-right text-stone-700">{requested}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-stone-900">{fulfilled}</td>
-                    <td className={`px-4 py-3 text-right font-semibold ${diff > 0 ? "text-orange-600" : "text-stone-400"}`}>
-                      {diff > 0 ? diff : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right text-stone-600">{price != null ? `$${price.toFixed(2)}` : "—"}</td>
-                    <td className="px-4 py-3 text-right font-bold text-stone-900">{total != null ? `$${total.toFixed(2)}` : "—"}</td>
-                  </tr>
+                  <>
+                    {/* Category heading row */}
+                    <tr key={`heading-${group.key}`} className="bg-[#f3ead8]">
+                      <td colSpan={8} className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-[#5c3a18]">
+                        {group.label}
+                      </td>
+                    </tr>
+                    {/* Item rows */}
+                    {group.lines.map((line) => {
+                      const requested = parseFloat(line.requested_qty);
+                      const fulfilled = parseFloat(line.fulfilled_qty ?? line.requested_qty);
+                      const diff = requested - fulfilled;
+                      const price = line.unit_price ? parseFloat(line.unit_price) : null;
+                      const total = price != null ? price * fulfilled : null;
+                      return (
+                        <tr key={line.sku} className={diff > 0 ? "bg-orange-50" : ""}>
+                          <td className="px-4 py-3 font-mono text-xs text-stone-500">{line.sku}</td>
+                          <td className="px-4 py-3 font-medium text-stone-900">{line.item_name}</td>
+                          <td className="px-4 py-3 text-stone-500">{line.unit_type}</td>
+                          <td className="px-4 py-3 text-right text-stone-700">{requested}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-stone-900">{fulfilled}</td>
+                          <td className={`px-4 py-3 text-right font-semibold ${diff > 0 ? "text-orange-600" : "text-stone-400"}`}>
+                            {diff > 0 ? diff : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-right text-stone-600">{price != null ? `$${price.toFixed(2)}` : "—"}</td>
+                          <td className="px-4 py-3 text-right font-bold text-stone-900">{total != null ? `$${total.toFixed(2)}` : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                    {/* Category subtotal row */}
+                    <tr key={`subtotal-${group.key}`} className="bg-stone-50 border-t border-stone-200">
+                      <td colSpan={3} className="px-4 py-2 text-xs font-semibold text-stone-500 italic">
+                        {group.label} subtotal
+                      </td>
+                      <td className="px-4 py-2 text-right text-xs font-semibold text-stone-600">{catStats.requested}</td>
+                      <td className="px-4 py-2 text-right text-xs font-semibold text-stone-700">{catStats.fulfilled}</td>
+                      <td className={`px-4 py-2 text-right text-xs font-semibold ${catStats.short > 0 ? "text-orange-600" : "text-stone-400"}`}>
+                        {catStats.short > 0 ? catStats.short : "—"}
+                      </td>
+                      <td className="px-4 py-2" />
+                      <td className="px-4 py-2 text-right text-xs font-bold text-stone-800">${catStats.value.toFixed(2)}</td>
+                    </tr>
+                  </>
                 );
               })}
             </tbody>
