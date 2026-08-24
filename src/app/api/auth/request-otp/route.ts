@@ -7,7 +7,6 @@ const WMU_DOMAIN = "wmich.edu";
 
 class OtpEmailSendError extends Error {
   status: number;
-
   providerDetails: string;
 
   constructor(status: number, providerDetails: string) {
@@ -24,63 +23,30 @@ function normalizeEmail(value: string) {
 
 function isAllowedEmail(email: string) {
   const parts = email.split("@");
-
-  if (parts.length !== 2) {
-    return false;
-  }
-
+  if (parts.length !== 2) return false;
   return parts[1] === WMU_DOMAIN;
 }
 
-
-function shouldUseDemoRecipient() {
-  return process.env.RESEND_FORCE_DEMO_RECIPIENT?.toLowerCase() === "true";
-}
-
-function allowProdRealEmail() {
-  return process.env.ALLOW_PROD_REAL_EMAIL?.toLowerCase() === "true";
-}
-
-function getOtpRecipient(email: string) {
-  const demoRecipient = process.env.RESEND_DEMO_RECIPIENT?.trim();
-
-  if (!demoRecipient) {
-    return email;
-  }
-
-  // Safe default: in production, route to demo recipient unless explicitly allowed.
-  if (process.env.NODE_ENV === "production" && !allowProdRealEmail()) {
-    return demoRecipient;
-  }
-
-  if (process.env.NODE_ENV !== "production" || shouldUseDemoRecipient()) {
-    return demoRecipient;
-  }
-
-  return email;
-}
-
 async function sendOtpEmail(email: string, otp: string) {
-  const apiKey = process.env.RESEND_API_KEY || process.env.Resend_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
+  const apiKey = process.env.BREVO_API_KEY;
+  const fromEmail = process.env.BREVO_FROM_EMAIL;
+  const fromName = process.env.BREVO_FROM_NAME ?? "WMU Dining Services";
 
-  if (!apiKey || !from) {
-    throw new Error("Resend settings are not configured.");
+  if (!apiKey || !fromEmail) {
+    throw new Error("Brevo settings are not configured.");
   }
 
-  const to = getOtpRecipient(email);
-
-  const response = await fetch("https://api.resend.com/emails", {
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      "api-key": apiKey,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from,
-      to: [to],
+      sender: { name: fromName, email: fromEmail },
+      to: [{ email }],
       subject: "Your WMU Inventory login code",
-      text: `Your verification code is ${otp}. It expires in 10 minutes.\n\nRequested for: ${email}`,
+      textContent: `Your verification code is ${otp}. It expires in 10 minutes.`,
     }),
   });
 
@@ -91,22 +57,10 @@ async function sendOtpEmail(email: string, otp: string) {
 }
 
 function getProviderStatusHint(status: number) {
-  if (status === 401) {
-    return "Invalid or missing RESEND_API_KEY.";
-  }
-
-  if (status === 403) {
-    return "Sender/domain is not verified in Resend for this environment.";
-  }
-
-  if (status === 422) {
-    return "Invalid email payload (usually FROM or TO address).";
-  }
-
-  if (status >= 500) {
-    return "Email provider temporary outage.";
-  }
-
+  if (status === 401) return "Invalid or missing BREVO_API_KEY.";
+  if (status === 403) return "Sender email is not verified in Brevo.";
+  if (status === 400) return "Invalid email payload (usually FROM or TO address).";
+  if (status >= 500) return "Email provider temporary outage.";
   return "Email provider rejected the request.";
 }
 
@@ -117,8 +71,7 @@ function getPublicErrorMessage(error: unknown) {
   }
 
   const details = error instanceof Error ? error.message : String(error);
-
-  if (details.includes("Resend settings are not configured")) {
+  if (details.includes("Brevo settings are not configured")) {
     return "Email delivery is not configured on the server.";
   }
 
