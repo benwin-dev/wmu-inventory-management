@@ -517,6 +517,14 @@ export default function Home() {
                   Admin
                 </a>
               )}
+              {(signedInRole === "admin" || signedInRole === "commissary") && (
+                <a
+                  href="/reports"
+                  className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-950"
+                >
+                  Reports
+                </a>
+              )}
               <a
                 href="/fulfillment"
                 className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:text-stone-950"
